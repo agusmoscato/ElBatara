@@ -1,0 +1,17 @@
+# Página de inicio por defecto
+DirectoryIndex index.php
+
+# Evita que se liste el contenido de carpetas si falta un index.php
+Options -Indexes
+
+# Bloquea el acceso directo por navegador a archivos que no deberían
+# descargarse nunca (scripts SQL, documentación, etc.) si llegaran a
+# quedar sueltos dentro de esta carpeta.
+<FilesMatch "\.(sql|md|txt)$">
+    Require all denied
+</FilesMatch>
+
+# Fuerza HTTPS si el hosting lo soporta (descomentar si Hostinger tiene SSL activo)
+# RewriteEngine On
+# RewriteCond %{HTTPS} off
+# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]

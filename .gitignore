@@ -1,0 +1,3 @@
+# Contiene credenciales reales de la base de datos de producción.
+# Se sube config.example.php como plantilla; config.php queda solo local.
+**/config/config.php

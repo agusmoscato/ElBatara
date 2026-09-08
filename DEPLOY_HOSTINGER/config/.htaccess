@@ -1,0 +1,3 @@
+# Bloquea el acceso directo por navegador a esta carpeta,
+# por si el hosting sirve esta carpeta en vez de solo public_html.
+Require all denied

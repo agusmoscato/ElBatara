@@ -1,0 +1,484 @@
+/* Estilos generales del sistema */
+
+:root {
+    --marca-principal: #8B2E2E;
+    --marca-principal-oscuro: #6e2424;
+    --marca-principal-claro: #b85c5c;
+    --marca-crema: #FAF3E9;
+    --marca-crema-oscuro: #EFE3D2;
+    --marca-secundario: #7a6a58;
+    --marca-secundario-oscuro: #5f5346;
+}
+
+body {
+    background-color: var(--marca-crema);
+    font-size: 1rem;
+}
+
+/* --- Branding: header, botones y acentos, aplicado en toda la app --- */
+.navbar-dark.bg-dark {
+    background-color: var(--marca-principal) !important;
+}
+
+.btn-primary {
+    background-color: var(--marca-principal);
+    border-color: var(--marca-principal);
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+    background-color: var(--marca-principal-oscuro) !important;
+    border-color: var(--marca-principal-oscuro) !important;
+}
+
+.btn-outline-primary {
+    color: var(--marca-principal);
+    border-color: var(--marca-principal);
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--marca-principal);
+    border-color: var(--marca-principal);
+    color: #fff;
+}
+
+.btn-secondary {
+    background-color: var(--marca-secundario);
+    border-color: var(--marca-secundario);
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus,
+.btn-secondary:active {
+    background-color: var(--marca-secundario-oscuro) !important;
+    border-color: var(--marca-secundario-oscuro) !important;
+}
+
+.btn-outline-secondary {
+    color: var(--marca-principal-oscuro);
+    border-color: #c9b8a8;
+}
+
+.btn-outline-secondary:hover {
+    background-color: var(--marca-crema-oscuro);
+    border-color: var(--marca-principal-oscuro);
+    color: var(--marca-principal-oscuro);
+}
+
+.nav-pills .nav-link {
+    color: var(--marca-principal-oscuro);
+}
+
+.nav-pills .nav-link.active {
+    background-color: var(--marca-principal);
+    color: #fff;
+}
+
+a {
+    color: var(--marca-principal);
+}
+
+a:hover {
+    color: var(--marca-principal-oscuro);
+}
+
+.card-title,
+h2, h4, h5.card-title {
+    color: var(--marca-principal-oscuro);
+}
+
+.card {
+    border-color: #e6d9c8;
+}
+
+/* Tablas: encabezado con la paleta de marca en vez del gris por defecto */
+.table thead th {
+    background-color: var(--marca-crema-oscuro);
+    color: var(--marca-principal-oscuro);
+    border-bottom-color: var(--marca-principal-claro);
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: #fffaf3;
+}
+
+/* Inputs y selects: foco e interruptores con el color de marca */
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--marca-principal-claro);
+    box-shadow: 0 0 0 0.25rem rgba(139, 46, 46, 0.2);
+}
+
+.form-check-input:checked {
+    background-color: var(--marca-principal);
+    border-color: var(--marca-principal);
+}
+
+.form-check-input:focus {
+    border-color: var(--marca-principal-claro);
+    box-shadow: 0 0 0 0.25rem rgba(139, 46, 46, 0.2);
+}
+
+/* Badges de estado genéricos (auditoría, stock, caja) conservan sus
+   colores semánticos (verde=ok, rojo=alerta) a propósito, para que la
+   marca no interfiera con la legibilidad de un estado bueno/malo. */
+
+/* Logo del negocio en el header y en el login. Mientras no se suba el
+   archivo real a assets/img/logo.png, se muestra un logo de texto de
+   respaldo (ver el onerror del <img> en header.php y login.php). */
+.logo-imagen {
+    height: 36px;
+    width: auto;
+}
+
+/* Logo grande en la pantalla de login */
+.logo-login {
+    max-height: 110px;
+    border-radius: 14px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+
+.logo-texto {
+    display: none; /* se muestra por JS solo si la imagen no carga */
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: var(--marca-crema);
+    color: var(--marca-principal);
+    font-weight: bold;
+    font-size: 0.95rem;
+}
+
+/* =========================================================
+   SALÓN DE MESAS
+   ========================================================= */
+.mesa-card {
+    display: block;
+    text-decoration: none;
+    border-radius: 12px;
+    padding: 24px 10px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.25rem;
+    color: #fff;
+    transition: transform 0.1s ease-in-out;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    border: 3px solid transparent;
+}
+
+.mesa-card:hover,
+.mesa-card:active {
+    transform: scale(1.03);
+    color: #fff;
+}
+
+.mesa-card .mesa-estado-texto {
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    display: block;
+    margin-top: 6px;
+}
+
+.mesa-card .mesa-tiempo {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-top: 4px;
+    opacity: 0.95;
+}
+
+/* Colores de estado bien diferenciados y legibles a distancia */
+.mesa-libre { background-color: #1e7e34; }
+.mesa-ocupada { background-color: #c0392b; }
+.mesa-cuenta_pedida { background-color: #d68910; }
+.mesa-inactiva { background-color: #6c757d; pointer-events: none; }
+
+/* =========================================================
+   TOMA DE PEDIDOS (POS) — pensado para uso táctil de pie
+   ========================================================= */
+/* El botón de producto NO usa el hover negro por defecto de Bootstrap
+   (.btn-outline-dark:hover pone fondo casi negro y texto blanco, y al
+   mezclarse con nuestra propia transición de "transform" en :active
+   se veía como un glitch de colores). Se fija explícitamente cada
+   estado (normal/hover/foco/activo) con la paleta de marca, y una
+   única transición simple para todas las propiedades que cambian. */
+.producto-btn {
+    width: 100%;
+    height: 100%;
+    min-height: 96px;
+    text-align: left;
+    white-space: normal;
+    font-size: 1.05rem;
+    border-width: 2px;
+    color: #2b2b2b;
+    background-color: #fff;
+    border-color: #d8cfc4;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+}
+
+.producto-btn:hover,
+.producto-btn:focus {
+    color: #2b2b2b;
+    background-color: rgba(139, 46, 46, 0.1);
+    border-color: var(--marca-principal);
+}
+
+.producto-btn:active {
+    color: #2b2b2b;
+    background-color: rgba(139, 46, 46, 0.18);
+    border-color: var(--marca-principal);
+    transform: scale(0.97);
+}
+
+.producto-btn .producto-precio {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #6b6b6b;
+}
+
+.producto-btn:hover .producto-precio,
+.producto-btn:active .producto-precio {
+    color: var(--marca-principal-oscuro);
+}
+
+/* Categorías del POS como chips grandes y táctiles en vez de un
+   desplegable o pestañas angostas */
+#tabsCategorias .nav-link {
+    font-size: 1.05rem;
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: 2px solid var(--marca-principal-claro);
+    margin: 3px;
+    background-color: #fff;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+#tabsCategorias .nav-link:hover {
+    background-color: rgba(139, 46, 46, 0.1);
+}
+
+/* Repetimos el selector con #tabsCategorias para que esta regla tenga
+   la MISMA especificidad (con ID) que la de arriba y gane por orden de
+   aparición; si no, la categoría activa por defecto queda con fondo y
+   texto blanco sobre blanco (invisible), porque la regla genérica
+   ".nav-pills .nav-link.active" de más arriba en el archivo tiene menos
+   especificidad al no usar un ID. */
+#tabsCategorias .nav-link.active {
+    background-color: var(--marca-principal);
+    border-color: var(--marca-principal);
+    color: #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+#tabsCategorias .nav-link.active:hover {
+    background-color: var(--marca-principal-oscuro);
+}
+
+/* Los chips de categoría quedan pegados arriba al scrollear una carta
+   larga, para no tener que volver al principio para cambiar de rubro. */
+#tabsCategorias {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background-color: var(--marca-crema);
+    padding: 6px 0;
+    margin-left: -4px;
+    margin-right: -4px;
+    padding-left: 4px;
+    padding-right: 4px;
+}
+
+/* El chip "Todos" se distingue un poco de las categorías puntuales */
+#tabsCategorias .nav-link[data-cat="todos"] {
+    border-style: dashed;
+}
+
+/* Buscador de productos dentro del POS */
+#buscadorProducto {
+    font-size: 1.1rem;
+    padding: 12px 16px;
+}
+
+#estadoFiltro {
+    margin-bottom: 10px;
+}
+
+/* Encabezados de categoría que solo se muestran en la vista "Todos",
+   para agrupar visualmente sin repetir el nombre cuando ya hay una
+   sola categoría elegida. */
+.categoria-heading {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--marca-principal-oscuro);
+    border-bottom: 2px solid var(--marca-crema-oscuro);
+    padding-bottom: 4px;
+    margin-top: 14px;
+    margin-bottom: 2px;
+}
+
+.categoria-heading:first-of-type {
+    margin-top: 0;
+}
+
+.producto-oculto-busqueda {
+    display: none !important;
+}
+
+/* Toast de confirmación al agregar un producto (feedback visual, no
+   silencioso). Se muestra y desaparece solo via JS. */
+#toastAgregado {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background-color: var(--marca-principal);
+    color: #fff;
+    padding: 14px 26px;
+    border-radius: 999px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+    z-index: 2000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+#toastAgregado.mostrar {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.stock-bajo {
+    background-color: #fff3cd !important;
+}
+
+/* Botones grandes para uso táctil en tablet/celular */
+.btn-lg-touch {
+    font-size: 1.15rem;
+    padding: 14px 20px;
+}
+
+/* Panel de "pedido actual" fijo/legible mientras se scrollea la carta */
+.panel-pedido {
+    position: sticky;
+    top: 12px;
+}
+
+.panel-pedido .table td,
+.panel-pedido .table th {
+    font-size: 1rem;
+    vertical-align: middle;
+}
+
+/* Tabla de detalle de un pedido (nombre de producto + cantidad +
+   subtotal), reutilizada en el panel del POS, en "Cobrar pedido" y en
+   el ticket. Usa table-layout fijo para que las columnas de cantidad
+   y subtotal tengan un ancho estable y el nombre del producto sea la
+   única columna que se angosta, en vez de romper el layout entero
+   cuando el nombre es muy largo (ej: la Picada El Batará). */
+.tabla-items-pedido {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.tabla-items-pedido td,
+.tabla-items-pedido th {
+    vertical-align: middle;
+}
+
+/* Con table-layout:fixed, las columnas con un ancho en px lo respetan
+   siempre (no se achican ni se solapan con el contenido de al lado);
+   la columna de producto no lleva ancho propio así que se queda con
+   todo el espacio restante. Los anchos alcanzan para "$ 999.999,00"
+   y "999 u." sin cortarse. */
+.tabla-items-pedido .col-cantidad {
+    width: 64px;
+    white-space: nowrap;
+    text-align: right;
+}
+
+.tabla-items-pedido .col-subtotal {
+    width: 96px;
+    white-space: nowrap;
+    text-align: right;
+}
+
+.tabla-items-pedido .col-quitar {
+    width: 40px;
+    white-space: nowrap;
+    text-align: center;
+    padding-left: 4px;
+    padding-right: 4px;
+}
+
+.nombre-producto-item {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
+    cursor: help;
+}
+
+@media (max-width: 768px) {
+    .tabla-items-pedido .col-cantidad { width: 54px; font-size: 0.85rem; }
+    .tabla-items-pedido .col-subtotal { width: 82px; font-size: 0.85rem; }
+    .tabla-items-pedido .col-quitar { width: 34px; }
+}
+
+/* =========================================================
+   IMPRESIÓN DE REPORTES
+   ========================================================= */
+@media print {
+    .no-imprimir {
+        display: none !important;
+    }
+    body {
+        background: #fff;
+    }
+}
+
+/* =========================================================
+   RESPONSIVE — tablet/celular en el mostrador
+   ========================================================= */
+@media (max-width: 768px) {
+    .producto-btn {
+        min-height: 84px;
+        font-size: 1rem;
+    }
+
+    #tabsCategorias .nav-link {
+        font-size: 0.95rem;
+        padding: 9px 14px;
+    }
+
+    .panel-pedido {
+        position: static;
+    }
+}
+
+@media (max-width: 576px) {
+    .mesa-card {
+        font-size: 1.05rem;
+        padding: 18px 6px;
+    }
+
+    .btn-lg-touch {
+        font-size: 1.05rem;
+        padding: 12px 16px;
+    }
+
+    h2 {
+        font-size: 1.4rem;
+    }
+}

@@ -1,0 +1,132 @@
+========================================================================
+ EL BATARA - SISTEMA DE GESTION - INSTRUCCIONES DE SUBIDA A HOSTINGER
+========================================================================
+
+Esta carpeta (DEPLOY_HOSTINGER) contiene TODO lo que hay que subir.
+No hay que reordenar ni mover nada a mano: se sube tal cual está.
+
+NOTA IMPORTANTE (ronda 6): antes de esta ronda, si actualizabas el
+sistema y volvías a subir los archivos, el navegador de la tablet o
+celular podía seguir usando una copia vieja de "assets/css/style.css"
+guardada en su caché, aunque el servidor ya tuviera la versión nueva
+(sin ningún error visible: la página cargaba pero con estilos o
+comportamiento viejo). Ahora el archivo includes/header.php le agrega
+automáticamente un número de versión al link del CSS para que esto no
+vuelva a pasar. Si en el futuro edito style.css, ese número de versión
+tiene que subir en includes/header.php (busca la variable
+$versionCss) para que los navegadores lo detecten como un archivo
+nuevo.
+
+
+PASO 1: SUBIR LOS ARCHIVOS
+---------------------------
+1. Entrá a hPanel de Hostinger -> Archivos -> Administrador de archivos.
+2. Abrí la carpeta "public_html" de tu dominio.
+3. Entrá DENTRO de esta carpeta "DEPLOY_HOSTINGER" en tu computadora,
+   seleccioná TODO su contenido (config, includes, assets, caja,
+   categorias, mesas, pedidos, productos, reportes, stock, .htaccess,
+   index.php, login.php, etc.) y subilo/pegalo dentro de "public_html".
+
+   IMPORTANTE: subí lo que está ADENTRO de DEPLOY_HOSTINGER, no la
+   carpeta "DEPLOY_HOSTINGER" en sí. Cuando termines, "public_html"
+   tiene que tener index.php, login.php, config/, includes/, etc.
+   directamente adentro (NO public_html/DEPLOY_HOSTINGER/index.php).
+
+
+PASO 2: CREAR E IMPORTAR LA BASE DE DATOS
+-------------------------------------------
+1. En hPanel -> Bases de datos MySQL, creá una base de datos (si no la
+   creaste ya) y anotá: nombre de la base, usuario, contraseña y host.
+2. Abrí phpMyAdmin desde hPanel, seleccioná esa base de datos, y andá
+   a la pestaña "Importar".
+3. Seleccioná el archivo "database.sql" DESDE TU COMPUTADORA (esta
+   carpeta NO lo incluye a propósito, para no subirlo sin querer al
+   servidor; lo tenés en la carpeta principal del proyecto, al lado
+   de DEPLOY_HOSTINGER) e importalo.
+
+Esto crea las tablas, carga la carta real de El Batará (productos y
+categorías reales, incluidos los que quedaron marcados como inactivos
+por precio pendiente de confirmar: latas de cerveza sin precio visible
+en la foto), mesas de ejemplo y dos usuarios:
+   admin    / 123456   (rol administrador)
+   empleado / 123456   (rol empleado)
+
+SI TU BASE YA ESTABA EN PRODUCCIÓN (ya habías importado database.sql
+en una ronda anterior, antes de que existiera la carta real): NO
+vuelvas a importar database.sql entero. En vez de eso, importá
+"carta_real.sql" (está al lado de database.sql, en la carpeta
+principal del proyecto) — agrega solo las categorías y productos
+nuevos, sin tocar tus mesas, usuarios ni el historial de pedidos/caja
+que ya tengas. Ese archivo tiene sus propias instrucciones en los
+primeros comentarios.
+
+Cambiá estas contraseñas apenas puedas entrar al sistema, desde el
+botón "Cambiar contraseña" que aparece arriba a la derecha una vez
+logueado.
+
+
+PASO 3: CONFIGURAR config/config.php
+--------------------------------------
+Abrí el archivo "config/config.php" que ya subiste (podés editarlo
+desde el mismo Administrador de Archivos de Hostinger, con el botón
+"Editar") y confirmá que estos valores sean los reales de tu base de
+datos de Hostinger:
+
+   DB_HOST  -> normalmente "localhost" en Hostinger, pero confirmalo
+               en el panel de tu base de datos (a veces es distinto).
+   DB_NAME  -> nombre de tu base de datos
+   DB_USER  -> usuario de tu base de datos
+   DB_PASS  -> contraseña de tu base de datos
+
+Si ya los completaste antes de subir, simplemente confirmá que sigan
+siendo correctos.
+
+
+PASO 4: VERIFICAR QUE config/ E includes/ ESTÁN PROTEGIDOS
+--------------------------------------------------------------
+Por seguridad, las carpetas "config" e "includes" quedan DENTRO de
+public_html (porque tu plan de hosting no permite subir archivos por
+fuera de esa carpeta), pero cada una tiene un archivo ".htaccess" que
+le dice al servidor "no muestres nada de acá si alguien entra por
+navegador". Para comprobar que funciona:
+
+1. Una vez subido todo, abrí el navegador y escribí:
+       https://tudominio.com/config/config.php
+   Tiene que aparecer un error "403 Forbidden" (o una página de
+   error del hosting). NO debe mostrar el código PHP ni ningún dato.
+
+2. Probá también:
+       https://tudominio.com/includes/db.php
+   Mismo resultado esperado: 403 Forbidden.
+
+Si en cambio ves el contenido del archivo, o se descarga, o ves
+información de la base de datos: PARÁ y avisá antes de seguir usando
+el sistema, porque significaría que el hosting no está respetando el
+.htaccess (pasa en configuraciones muy poco comunes de Apache, o si
+el plan usa Nginx en vez de Apache). En ese caso hay que resolverlo
+antes de que el sistema quede expuesto.
+
+
+PASO 5: PROBAR EL SISTEMA
+---------------------------
+1. Entrá a https://tudominio.com (o el dominio que corresponda).
+2. Deberías ver la pantalla de login.
+3. Entrá con admin / 123456, cambiá la contraseña, y probá abrir la
+   caja, tomar un pedido de prueba y cobrarlo.
+
+
+PROBLEMAS COMUNES
+--------------------
+- Pantalla en blanco: revisá el archivo INSTALL.md (en la carpeta
+  principal del proyecto, no en esta) para más detalle de diagnóstico,
+  o activá temporalmente MODO_DESARROLLO en config/config.php.
+- "No se pudo conectar a la base de datos": revisá DB_HOST, DB_NAME,
+  DB_USER y DB_PASS en config/config.php.
+- El logo no aparece: es normal si todavía no subiste tu logo. Subí
+  el archivo a "assets/img/logo.png" (mismo nombre) y va a aparecer
+  automáticamente, reemplazando el círculo con las iniciales.
+
+
+Para el backup de la base de datos y otros detalles avanzados, ver
+INSTALL.md en la carpeta principal del proyecto (fuera de esta
+carpeta DEPLOY_HOSTINGER).
