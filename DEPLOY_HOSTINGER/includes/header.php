@@ -23,7 +23,7 @@ $versionCss = '20260907-r6';
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= h($titulo) ?></title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="<?= $base ?>assets/vendor/bootstrap-5.3.3/bootstrap.min.css" rel="stylesheet">
 <link href="<?= $base ?>assets/css/style.css?v=<?= h($versionCss) ?>" rel="stylesheet">
 </head>
 <body>
@@ -69,3 +69,4 @@ $versionCss = '20260907-r6';
 </nav>
 <?php endif; ?>
 <div class="container-fluid px-3">
+<?php mostrarFlashError(); ?>

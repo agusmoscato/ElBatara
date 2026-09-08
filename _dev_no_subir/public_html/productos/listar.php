@@ -1,16 +1,42 @@
 <?php
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/paginacion.php';
 requerirAdmin();
 
 $pdo = obtenerConexion();
 
 $categorias = $pdo->query('SELECT * FROM categorias WHERE activo = 1 ORDER BY nombre')->fetchAll();
 
-$productos = $pdo->query("SELECT p.*, c.nombre AS categoria_nombre
-                           FROM productos p
-                           JOIN categorias c ON c.id = p.categoria_id
-                           ORDER BY p.nombre")->fetchAll();
+$categoriaId = intPositivoONull($_GET['categoria_id'] ?? null);
+$texto = trim($_GET['q'] ?? '');
+
+$where = [];
+$params = [];
+if ($categoriaId) {
+    $where[] = 'p.categoria_id = ?';
+    $params[] = $categoriaId;
+}
+if ($texto !== '') {
+    $where[] = 'p.nombre LIKE ?';
+    $params[] = '%' . $texto . '%';
+}
+$whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM productos p $whereSql");
+$stmt->execute($params);
+$totalFilas = (int)$stmt->fetchColumn();
+
+$pagina = obtenerPaginaActual();
+$offset = calcularOffset($pagina);
+$stmt = $pdo->prepare("SELECT p.*, c.nombre AS categoria_nombre
+                        FROM productos p
+                        JOIN categorias c ON c.id = p.categoria_id
+                        $whereSql
+                        ORDER BY p.nombre
+                        LIMIT $offset, " . FILAS_POR_PAGINA);
+$stmt->execute($params);
+$productos = $stmt->fetchAll();
 
 $tituloPagina = 'Productos';
 require __DIR__ . '/../../includes/header.php';
@@ -23,6 +49,25 @@ require __DIR__ . '/../../includes/header.php';
   </button>
 </div>
 
+<form method="get" action="listar.php" class="row g-2 align-items-end mb-3">
+  <div class="col-auto">
+    <label class="form-label">Buscar</label>
+    <input type="text" name="q" value="<?= h($texto) ?>" class="form-control" placeholder="Nombre del producto...">
+  </div>
+  <div class="col-auto">
+    <label class="form-label">Categoría</label>
+    <select name="categoria_id" class="form-select">
+      <option value="">Todas</option>
+      <?php foreach ($categorias as $c): ?>
+        <option value="<?= (int)$c['id'] ?>" <?= $categoriaId === (int)$c['id'] ? 'selected' : '' ?>><?= h($c['nombre']) ?></option>
+      <?php endforeach; ?>
+    </select>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-primary">Filtrar</button>
+  </div>
+</form>
+
 <div class="table-responsive">
 <table class="table table-striped bg-white shadow-sm align-middle">
   <thead>
@@ -32,12 +77,20 @@ require __DIR__ . '/../../includes/header.php';
     </tr>
   </thead>
   <tbody>
+    <?php if (empty($productos)): ?>
+      <tr><td colspan="8" class="text-muted">Sin productos que coincidan con el filtro.</td></tr>
+    <?php endif; ?>
     <?php foreach ($productos as $p): ?>
     <tr class="<?= (float)$p['stock_actual'] <= (float)$p['stock_minimo'] ? 'stock-bajo' : '' ?>">
       <td><?= h($p['nombre']) ?></td>
       <td><?= h($p['categoria_nombre']) ?></td>
       <td><?= $p['tipo_venta'] === 'peso' ? 'Por peso (kg)' : 'Por unidad' ?></td>
-      <td><?= formatearMoneda((float)$p['precio']) ?></td>
+      <td>
+        <?= formatearMoneda((float)$p['precio']) ?>
+        <?php if ($p['precio_a_revisar']): ?>
+          <span class="badge bg-warning text-dark" title="Precio cargado desde una foto de la carta, a confirmar con el dueño">⚠ Revisar precio</span>
+        <?php endif; ?>
+      </td>
       <td><?= formatearCantidad((float)$p['stock_actual'], $p['tipo_venta']) ?></td>
       <td><?= formatearCantidad((float)$p['stock_minimo'], $p['tipo_venta']) ?></td>
       <td>
@@ -57,6 +110,7 @@ require __DIR__ . '/../../includes/header.php';
   </tbody>
 </table>
 </div>
+<?= renderPaginacion($pagina, $totalFilas) ?>
 
 <!-- Modal alta/edición -->
 <div class="modal fade" id="modalProducto" tabindex="-1">
@@ -107,6 +161,10 @@ require __DIR__ . '/../../includes/header.php';
             <input type="checkbox" name="activo" id="f_activo" class="form-check-input" checked>
             <label class="form-check-label" for="f_activo">Activo (visible en el menú)</label>
           </div>
+          <div class="form-check form-switch">
+            <input type="checkbox" name="precio_a_revisar" id="f_precio_a_revisar" class="form-check-input">
+            <label class="form-check-label" for="f_precio_a_revisar">⚠ Precio a revisar (mostrar advertencia hasta confirmarlo)</label>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="submit" class="btn btn-primary">Guardar</button>
@@ -126,6 +184,7 @@ function nuevoProducto() {
   document.getElementById('f_stock_actual').value = '';
   document.getElementById('f_stock_minimo').value = '';
   document.getElementById('f_activo').checked = true;
+  document.getElementById('f_precio_a_revisar').checked = false;
 }
 
 function editarProducto(p) {
@@ -138,6 +197,7 @@ function editarProducto(p) {
   document.getElementById('f_stock_actual').value = p.stock_actual;
   document.getElementById('f_stock_minimo').value = p.stock_minimo;
   document.getElementById('f_activo').checked = p.activo == 1;
+  document.getElementById('f_precio_a_revisar').checked = p.precio_a_revisar == 1;
 }
 </script>
 

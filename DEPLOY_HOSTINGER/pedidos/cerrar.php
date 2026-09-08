@@ -35,22 +35,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($cantidadItems === 0) {
         $error = 'El pedido no tiene productos cargados.';
     } else {
-        $pdo->beginTransaction();
-        try {
+        $resultado = ejecutarTransaccion($pdo, function (PDO $pdo) use ($medioPago, $pedidoId, $pedido) {
             $pdo->prepare("UPDATE pedidos SET estado = 'cerrado', medio_pago = ?, cerrado_en = NOW(), cerrado_por_id = ? WHERE id = ?")
                 ->execute([$medioPago, $_SESSION['usuario_id'], $pedidoId]);
 
             if ($pedido['mesa_id']) {
                 $pdo->prepare("UPDATE mesas SET estado = 'libre' WHERE id = ?")->execute([$pedido['mesa_id']]);
             }
+        }, 'cerrar pedido', 'No se pudo cerrar el pedido. Intentá nuevamente.');
 
-            $pdo->commit();
+        if ($resultado['ok']) {
             redirigir('pedidos/ticket.php?pedido_id=' . $pedidoId);
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            error_log('Error al cerrar pedido: ' . $e->getMessage());
-            $error = 'No se pudo cerrar el pedido. Intentá nuevamente.';
         }
+        $error = $resultado['error'];
     }
 }
 

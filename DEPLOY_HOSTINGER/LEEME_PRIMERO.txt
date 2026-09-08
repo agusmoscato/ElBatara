@@ -5,6 +5,15 @@
 Esta carpeta (DEPLOY_HOSTINGER) contiene TODO lo que hay que subir.
 No hay que reordenar ni mover nada a mano: se sube tal cual está.
 
+NOTA (ronda 7): Bootstrap y Chart.js ya NO se cargan desde internet
+(CDN) — están vendorizados dentro de "assets/vendor/" y se suben como
+cualquier otro archivo de esta carpeta, sin pasos extra. Esto hace que
+el sistema funcione aunque el local se quede sin conexión a internet
+(seguía necesitando la base de datos igual, claro). Si en el futuro se
+actualiza la versión de Bootstrap o Chart.js, hay que reemplazar los
+archivos dentro de "assets/vendor/" a mano (no hay ningún proceso
+automático de actualización).
+
 NOTA IMPORTANTE (ronda 6): antes de esta ronda, si actualizabas el
 sistema y volvías a subir los archivos, el navegador de la tablet o
 celular podía seguir usando una copia vieja de "assets/css/style.css"
@@ -59,6 +68,13 @@ principal del proyecto) — agrega solo las categorías y productos
 nuevos, sin tocar tus mesas, usuarios ni el historial de pedidos/caja
 que ya tengas. Ese archivo tiene sus propias instrucciones en los
 primeros comentarios.
+
+Si tu base ya tenía la carta real cargada de una ronda anterior a la
+7, también hace falta correr "migracion_ronda7.sql" (al lado de
+database.sql) para sumar: el bloqueo de login por intentos fallidos,
+el índice que impide dos cajas abiertas a la vez, la marca de "precio
+a revisar" en Productos, y un índice de reportes. Es seguro de correr
+una sola vez; leé el comentario al principio del archivo antes.
 
 Cambiá estas contraseñas apenas puedas entrar al sistema, desde el
 botón "Cambiar contraseña" que aparece arriba a la derecha una vez

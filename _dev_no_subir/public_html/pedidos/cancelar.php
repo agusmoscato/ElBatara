@@ -24,18 +24,21 @@ if (!$pedido) {
     redirigir('mesas/salon.php');
 }
 
-$pdo->beginTransaction();
-try {
-    // Devolvemos al stock todos los productos que estaban cargados en el pedido.
-    $stmt = $pdo->prepare('SELECT producto_id, cantidad FROM pedido_items WHERE pedido_id = ?');
-    $stmt->execute([$pedidoId]);
-    foreach ($stmt->fetchAll() as $item) {
-        $pdo->prepare('UPDATE productos SET stock_actual = stock_actual + ? WHERE id = ?')
-            ->execute([$item['cantidad'], $item['producto_id']]);
+$resultado = ejecutarTransaccion($pdo, function (PDO $pdo) use ($pedidoId, $pedido) {
+    // Devolvemos al stock todos los productos que estaban cargados en el
+    // pedido en dos operaciones batch (UPDATE con JOIN + INSERT...SELECT)
+    // en vez de una consulta por ítem: mismo resultado, sin loop de
+    // round-trips a la base.
+    $pdo->prepare('UPDATE productos p
+                    JOIN pedido_items pi ON pi.producto_id = p.id
+                    SET p.stock_actual = p.stock_actual + pi.cantidad
+                    WHERE pi.pedido_id = ?')
+        ->execute([$pedidoId]);
 
-        $pdo->prepare('INSERT INTO movimientos_stock (producto_id, tipo, cantidad, referencia_pedido_id, usuario_id, nota) VALUES (?, ?, ?, ?, ?, ?)')
-            ->execute([$item['producto_id'], 'ajuste', $item['cantidad'], $pedidoId, $_SESSION['usuario_id'], 'Reversión por cancelación de pedido']);
-    }
+    $pdo->prepare("INSERT INTO movimientos_stock (producto_id, tipo, cantidad, referencia_pedido_id, usuario_id, nota)
+                    SELECT producto_id, 'ajuste', cantidad, pedido_id, ?, 'Reversión por cancelación de pedido'
+                    FROM pedido_items WHERE pedido_id = ?")
+        ->execute([$_SESSION['usuario_id'], $pedidoId]);
 
     $pdo->prepare("UPDATE pedidos SET estado = 'cancelado', cancelado_en = NOW(), cancelado_por_id = ? WHERE id = ?")
         ->execute([$_SESSION['usuario_id'], $pedidoId]);
@@ -43,11 +46,10 @@ try {
     if ($pedido['mesa_id']) {
         $pdo->prepare("UPDATE mesas SET estado = 'libre' WHERE id = ?")->execute([$pedido['mesa_id']]);
     }
+}, 'cancelar pedido', 'No se pudo cancelar el pedido. Intentá nuevamente.');
 
-    $pdo->commit();
-} catch (Exception $e) {
-    $pdo->rollBack();
-    error_log('Error al cancelar pedido: ' . $e->getMessage());
+if (!$resultado['ok']) {
+    flashError($resultado['error']);
 }
 
 redirigir('mesas/salon.php');

@@ -81,7 +81,7 @@ require __DIR__ . '/../includes/header.php';
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="<?= $base ?>assets/vendor/chartjs-4.4.4/chart.umd.min.js"></script>
 <script>
 const etiquetas = <?= json_encode(array_map(fn($f) => $etiquetasMedios[$f['medio_pago']] ?? $f['medio_pago'], $filas)) ?>;
 const totales = <?= json_encode(array_map(fn($f) => (float)$f['total'], $filas)) ?>;

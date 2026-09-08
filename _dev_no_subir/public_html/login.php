@@ -16,10 +16,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($usuario === '' || $password === '') {
         $error = 'Ingresá usuario y contraseña.';
-    } elseif (iniciarSesion($usuario, $password)) {
-        redirigir('dashboard.php');
     } else {
-        $error = 'Usuario o contraseña incorrectos.';
+        $resultado = iniciarSesion($usuario, $password);
+        if ($resultado === true) {
+            redirigir('dashboard.php');
+        } else {
+            $error = $resultado;
+        }
     }
 }
 

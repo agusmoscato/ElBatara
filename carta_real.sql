@@ -83,6 +83,8 @@ ALTER TABLE caja_sesiones ADD COLUMN nota VARCHAR(500) NULL AFTER cerrada_en;
 -- las categorías de ejemplo desde la pantalla de Categorías.
 -- =====================================================================
 
+-- INICIO_CARTA_COMPARABLE (marcador para scripts/comparar_arboles.sh —
+-- no borrar; delimita el bloque que debe ser idéntico en ambos archivos)
 -- Cada categoría se inserta solo si no existe ya una con ese nombre
 -- (INSERT ... SELECT ... WHERE NOT EXISTS). Esto evita duplicar la
 -- categoría "Bebidas" si tu base ya tenía una con ese nombre de los
@@ -233,4 +235,16 @@ INSERT INTO productos (categoria_id, nombre, tipo_venta, precio, stock_actual, s
 ((SELECT id FROM categorias WHERE nombre = 'Cervezas' LIMIT 1), 'Stella Artois de Litro', 'unidad', 9000.00, 12.000, 3.000, 1),
 ((SELECT id FROM categorias WHERE nombre = 'Cervezas' LIMIT 1), 'Heineken de Litro', 'unidad', 9000.00, 12.000, 3.000, 1),
 ((SELECT id FROM categorias WHERE nombre = 'Cervezas' LIMIT 1), 'Andes Roja de Litro', 'unidad', 0.00, 0.000, 0.000, 0); -- PENDIENTE: falta precio, inactivo hasta confirmar
+-- FIN_CARTA_COMPARABLE
+
+-- Ronda 7: si tu base todavía no tiene la columna precio_a_revisar
+-- (badge de advertencia en Productos), corré antes migracion_ronda7.sql.
+-- Esta UPDATE es segura de repetir: solo marca los 3 productos con
+-- precio dudoso identificados en la carga de la carta real.
+UPDATE productos SET precio_a_revisar = 1
+WHERE nombre IN (
+    'Costeletas de ternera con papas fritas (2 unidades)',
+    'Papas fritas (bastón) c/cheddar',
+    'Cerro Callejero tinto'
+);
 

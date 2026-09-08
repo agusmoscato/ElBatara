@@ -1,16 +1,34 @@
 <?php
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/paginacion.php';
 requerirAdmin();
 
 $pdo = obtenerConexion();
 
-$desde = $_GET['desde'] ?? date('Y-m-d', strtotime('-6 days'));
-$hasta = $_GET['hasta'] ?? date('Y-m-d');
+$desde = obtenerFechaGet('desde', date('Y-m-d', strtotime('-6 days')));
+$hasta = obtenerFechaGet('hasta', date('Y-m-d'));
+$usuarioId = intPositivoONull($_GET['usuario_id'] ?? null);
+$estadoFiltro = in_array($_GET['estado'] ?? '', ['cerrado', 'cancelado'], true) ? $_GET['estado'] : '';
 
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) { $desde = date('Y-m-d', strtotime('-6 days')); }
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) { $hasta = date('Y-m-d'); }
+$where = ["p.estado IN ('cerrado', 'cancelado')", 'DATE(COALESCE(p.cerrado_en, p.cancelado_en)) BETWEEN ? AND ?'];
+$params = [$desde, $hasta];
+if ($estadoFiltro) {
+    $where = ['p.estado = ?', 'DATE(COALESCE(p.cerrado_en, p.cancelado_en)) BETWEEN ? AND ?'];
+    $params = [$estadoFiltro, $desde, $hasta];
+}
+if ($usuarioId) {
+    $where[] = '(p.usuario_id = ? OR p.entregado_por_id = ? OR p.cerrado_por_id = ? OR p.cancelado_por_id = ?)';
+    array_push($params, $usuarioId, $usuarioId, $usuarioId, $usuarioId);
+}
+$whereSql = implode(' AND ', $where);
 
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM pedidos p WHERE $whereSql");
+$stmt->execute($params);
+$totalFilas = (int)$stmt->fetchColumn();
+
+$pagina = obtenerPaginaActual();
+$offset = calcularOffset($pagina);
 $stmt = $pdo->prepare("SELECT p.id, p.estado, p.total, p.medio_pago, p.creado_en,
                                p.entregado_en, p.cerrado_en, p.cancelado_en,
                                m.nombre AS mesa_nombre,
@@ -24,11 +42,13 @@ $stmt = $pdo->prepare("SELECT p.id, p.estado, p.total, p.medio_pago, p.creado_en
                         LEFT JOIN usuarios ue ON ue.id = p.entregado_por_id
                         LEFT JOIN usuarios uc ON uc.id = p.cerrado_por_id
                         LEFT JOIN usuarios ua ON ua.id = p.cancelado_por_id
-                        WHERE p.estado IN ('cerrado', 'cancelado')
-                          AND DATE(COALESCE(p.cerrado_en, p.cancelado_en)) BETWEEN ? AND ?
-                        ORDER BY COALESCE(p.cerrado_en, p.cancelado_en) DESC");
-$stmt->execute([$desde, $hasta]);
+                        WHERE $whereSql
+                        ORDER BY COALESCE(p.cerrado_en, p.cancelado_en) DESC
+                        LIMIT $offset, " . FILAS_POR_PAGINA);
+$stmt->execute($params);
 $pedidos = $stmt->fetchAll();
+
+$usuarios = $pdo->query('SELECT id, nombre FROM usuarios ORDER BY nombre')->fetchAll();
 
 $tituloPagina = 'Auditoría de pedidos';
 require __DIR__ . '/../../includes/header.php';
@@ -46,6 +66,23 @@ require __DIR__ . '/../../includes/header.php';
     <input type="date" name="hasta" value="<?= h($hasta) ?>" class="form-control">
   </div>
   <div class="col-auto">
+    <label class="form-label">Usuario</label>
+    <select name="usuario_id" class="form-select">
+      <option value="">Todos</option>
+      <?php foreach ($usuarios as $u): ?>
+        <option value="<?= (int)$u['id'] ?>" <?= $usuarioId === (int)$u['id'] ? 'selected' : '' ?>><?= h($u['nombre']) ?></option>
+      <?php endforeach; ?>
+    </select>
+  </div>
+  <div class="col-auto">
+    <label class="form-label">Estado</label>
+    <select name="estado" class="form-select">
+      <option value="">Todos</option>
+      <option value="cerrado" <?= $estadoFiltro === 'cerrado' ? 'selected' : '' ?>>Cobrado</option>
+      <option value="cancelado" <?= $estadoFiltro === 'cancelado' ? 'selected' : '' ?>>Cancelado</option>
+    </select>
+  </div>
+  <div class="col-auto">
     <button type="submit" class="btn btn-primary">Filtrar</button>
   </div>
 </form>
@@ -61,6 +98,9 @@ require __DIR__ . '/../../includes/header.php';
     </tr>
   </thead>
   <tbody>
+    <?php if (empty($pedidos)): ?>
+      <tr><td colspan="11" class="text-muted">Sin pedidos que coincidan con el filtro.</td></tr>
+    <?php endif; ?>
     <?php foreach ($pedidos as $p): ?>
     <tr>
       <td><?= (int)$p['id'] ?></td>
@@ -83,5 +123,6 @@ require __DIR__ . '/../../includes/header.php';
   </tbody>
 </table>
 </div>
+<?= renderPaginacion($pagina, $totalFilas) ?>
 
 <?php require __DIR__ . '/../../includes/footer.php'; ?>

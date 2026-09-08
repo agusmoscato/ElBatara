@@ -4,6 +4,44 @@
  */
 
 /**
+ * Error esperado de negocio dentro de una transacción (ej: "stock
+ * insuficiente"), a diferencia de un error técnico inesperado. Su
+ * mensaje es seguro para mostrar tal cual al usuario.
+ */
+class ValidacionException extends Exception
+{
+}
+
+/**
+ * Ejecuta $operacion dentro de una transacción, con el mismo patrón de
+ * begin/commit/rollback repetido antes en agregar_item.php, cerrar.php,
+ * cancelar.php y reponer.php. $operacion puede lanzar ValidacionException
+ * para errores esperados de negocio (el mensaje se devuelve tal cual al
+ * caller) o dejar pasar cualquier otra excepción para errores técnicos
+ * inesperados (se loguean con $contextoLog y se devuelve
+ * $mensajeErrorGenerico en su lugar, sin exponer detalles internos).
+ *
+ * Devuelve ['ok' => true, 'datos' => <lo que devuelva $operacion>] o
+ * ['ok' => false, 'error' => <mensaje para mostrar al usuario>].
+ */
+function ejecutarTransaccion(PDO $pdo, callable $operacion, string $contextoLog, string $mensajeErrorGenerico): array
+{
+    $pdo->beginTransaction();
+    try {
+        $datos = $operacion($pdo);
+        $pdo->commit();
+        return ['ok' => true, 'datos' => $datos];
+    } catch (ValidacionException $e) {
+        $pdo->rollBack();
+        return ['ok' => false, 'error' => $e->getMessage()];
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        error_log("Error al $contextoLog: " . $e->getMessage());
+        return ['ok' => false, 'error' => $mensajeErrorGenerico];
+    }
+}
+
+/**
  * Escapa texto para mostrarlo de forma segura en HTML (evita XSS).
  */
 function h(?string $texto): string
@@ -64,6 +102,33 @@ function redirigir(string $rutaRelativa): void
 }
 
 /**
+ * Guarda un mensaje de error para mostrarlo en la página a la que se
+ * redirige después (patrón "flash message"). Usar antes de redirigir()
+ * cuando una validación falla en un endpoint que no renderiza HTML
+ * propio (por ejemplo guardar.php), en vez de redirigir en silencio.
+ */
+function flashError(string $mensaje): void
+{
+    $_SESSION['flash_error'] = $mensaje;
+}
+
+/**
+ * Imprime (y limpia) el mensaje de error guardado con flashError(), si
+ * hay alguno pendiente. Se llama una sola vez desde header.php para que
+ * cualquier página del sistema pueda mostrar sus errores de redirección
+ * con el mismo estilo que ya usan los formularios que no redirigen
+ * (login, abrir caja, etc.).
+ */
+function mostrarFlashError(): void
+{
+    if (empty($_SESSION['flash_error'])) {
+        return;
+    }
+    echo '<div class="alert alert-danger">' . h($_SESSION['flash_error']) . '</div>';
+    unset($_SESSION['flash_error']);
+}
+
+/**
  * Formatea el tiempo transcurrido desde una fecha/hora hasta ahora,
  * en un formato corto ("5 min", "1h 20min"). Se usa para mostrar hace
  * cuánto está abierta una mesa ocupada.
@@ -116,6 +181,28 @@ function intPositivoONull($valor): ?int
     }
     $filtrado = filter_var($valor, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
     return $filtrado === false ? null : $filtrado;
+}
+
+/**
+ * Devuelve el HTML del botón de acción según el estado del pedido
+ * (abierto -> "Enviar a cocina", en_preparacion -> "tocar al entregar",
+ * entregado -> badge). Se usa tanto en el render inicial de
+ * pedidos/nuevo.php como, con el mismo formato replicado en JS, para
+ * actualizar la pantalla sin recargar toda la página al cambiar de
+ * estado (ver actualizarBotonEstadoPedido() en nuevo.php).
+ */
+function renderBotonEstadoPedido(string $estado): string
+{
+    if ($estado === 'abierto') {
+        return '<button class="btn btn-info btn-lg-touch" onclick="enviarCocina()">Enviar a cocina</button>';
+    }
+    if ($estado === 'en_preparacion') {
+        return '<button class="btn btn-info btn-lg-touch" onclick="marcarEntregado()" title="Tocar cuando se lleve el pedido a la mesa">En preparación (tocar al entregar)</button>';
+    }
+    if ($estado === 'entregado') {
+        return '<span class="badge bg-success align-self-center fs-6">✓ Entregado</span>';
+    }
+    return '';
 }
 
 /**

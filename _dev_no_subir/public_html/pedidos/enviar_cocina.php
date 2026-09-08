@@ -27,4 +27,9 @@ if (!$pedidoId) {
 $stmt = $pdo->prepare("UPDATE pedidos SET estado = 'en_preparacion' WHERE id = ? AND estado = 'abierto'");
 $stmt->execute([$pedidoId]);
 
-echo json_encode(['ok' => true]);
+if ($stmt->rowCount() === 0) {
+    echo json_encode(['error' => 'El pedido ya no está en estado "abierto". Recargá la página.']);
+    exit;
+}
+
+echo json_encode(['ok' => true, 'estado' => 'en_preparacion']);

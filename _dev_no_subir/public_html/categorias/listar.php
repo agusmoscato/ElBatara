@@ -25,7 +25,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'guard
     redirigir('categorias/listar.php');
 }
 
-$categorias = $pdo->query('SELECT * FROM categorias ORDER BY nombre')->fetchAll();
+$texto = trim($_GET['q'] ?? '');
+if ($texto !== '') {
+    $stmt = $pdo->prepare('SELECT * FROM categorias WHERE nombre LIKE ? ORDER BY nombre');
+    $stmt->execute(['%' . $texto . '%']);
+    $categorias = $stmt->fetchAll();
+} else {
+    $categorias = $pdo->query('SELECT * FROM categorias ORDER BY nombre')->fetchAll();
+}
+
+// Sin paginación: la cantidad de categorías de un solo local es chica.
+// Si algún día crece mucho, el mismo patrón de productos/listar.php
+// (COUNT + LIMIT/OFFSET + renderPaginacion) se puede aplicar acá igual.
 
 $tituloPagina = 'Categorías';
 require __DIR__ . '/../../includes/header.php';
@@ -56,9 +67,21 @@ require __DIR__ . '/../../includes/header.php';
   </div>
 
   <div class="col-md-7">
+    <form method="get" action="listar.php" class="row g-2 align-items-end mb-3">
+      <div class="col-auto">
+        <label class="form-label">Buscar</label>
+        <input type="text" name="q" value="<?= h($texto) ?>" class="form-control" placeholder="Nombre de categoría...">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+      </div>
+    </form>
     <table class="table table-striped bg-white shadow-sm">
       <thead><tr><th>Nombre</th><th>Estado</th><th></th></tr></thead>
       <tbody>
+        <?php if (empty($categorias)): ?>
+          <tr><td colspan="3" class="text-muted">Sin categorías que coincidan con el filtro.</td></tr>
+        <?php endif; ?>
         <?php foreach ($categorias as $c): $formId = 'form_cat_' . (int)$c['id']; ?>
         <tr>
           <td>

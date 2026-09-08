@@ -15,3 +15,27 @@ Options -Indexes
 # RewriteEngine On
 # RewriteCond %{HTTPS} off
 # RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Cabeceras de seguridad HTTP. Envueltas en <IfModule> para no romper el
+# sitio si mod_headers no estuviera habilitado en el hosting.
+<IfModule mod_headers.c>
+    # Evita que el navegador intente "adivinar" el tipo de un archivo
+    # servido con un Content-Type distinto al declarado.
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Evita que el sitio se pueda embeber en un <iframe> de otro dominio
+    # (protección contra clickjacking).
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # Content-Security-Policy: solo recursos del propio dominio — desde que
+    # Bootstrap y Chart.js se vendorizaron localmente (assets/vendor/, ver
+    # MEMORY.md Fase 5) ya no hace falta permitir ningún CDN externo.
+    # 'unsafe-inline' queda habilitado en script-src y style-src porque el
+    # sistema es PHP procedural con bastante JS y CSS inline (ver
+    # pedidos/nuevo.php, reportes/*.php, stock/reponer.php) — migrar todo
+    # eso a nonces/archivos externos es un cambio de arquitectura grande
+    # que excede este endurecimiento puntual. Igual se gana protección
+    # real contra la carga de scripts/estilos desde cualquier dominio
+    # externo.
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+</IfModule>

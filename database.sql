@@ -18,6 +18,12 @@ CREATE TABLE IF NOT EXISTS usuarios (
     password_hash VARCHAR(255) NOT NULL,
     rol ENUM('admin', 'empleado') NOT NULL DEFAULT 'empleado',
     activo TINYINT(1) NOT NULL DEFAULT 1,
+    -- Bloqueo temporal por fuerza bruta: se cuentan los intentos fallidos
+    -- consecutivos y, al llegar al límite, se guarda hasta cuándo queda
+    -- bloqueado el usuario (ver includes/auth.php). Se resetean ambos en
+    -- cada login exitoso.
+    intentos_fallidos TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    bloqueado_hasta DATETIME NULL,
     creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -45,6 +51,11 @@ CREATE TABLE IF NOT EXISTS productos (
     stock_actual DECIMAL(10,3) NOT NULL DEFAULT 0.000,
     stock_minimo DECIMAL(10,3) NOT NULL DEFAULT 0.000,
     activo TINYINT(1) NOT NULL DEFAULT 1,
+    -- Marca productos con precio dudoso cargado a partir de fotos de la
+    -- carta (ver comentarios "revisar" en la sección CARTA REAL de este
+    -- archivo). Se muestra como badge de advertencia en Productos hasta que
+    -- el dueño confirme el precio real y lo desmarque a mano.
+    precio_a_revisar TINYINT(1) NOT NULL DEFAULT 0,
     creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_productos_categoria FOREIGN KEY (categoria_id) REFERENCES categorias(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -97,6 +108,9 @@ CREATE TABLE IF NOT EXISTS pedidos (
 
 CREATE INDEX idx_pedidos_estado ON pedidos(estado);
 CREATE INDEX idx_pedidos_cerrado_en ON pedidos(cerrado_en);
+-- Compuesto: reportes/ventas.php y caja/cerrar.php siempre filtran por
+-- estado='cerrado' Y un rango de cerrado_en al mismo tiempo.
+CREATE INDEX idx_pedidos_estado_cerrado ON pedidos(estado, cerrado_en);
 
 -- ---------------------------------------------------------------------
 -- Tabla: pedido_items
@@ -154,7 +168,15 @@ CREATE TABLE IF NOT EXISTS caja_sesiones (
     abierta_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     cerrada_en DATETIME NULL,
     nota VARCHAR(500) NULL,
-    CONSTRAINT fk_caja_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+    -- Columna generada: vale 1 solo cuando estado='abierta', NULL en cualquier
+    -- otro caso. MySQL permite múltiples NULL en un índice UNIQUE pero nunca
+    -- más de un mismo valor no-NULL, así que este índice hace imposible tener
+    -- dos filas con estado='abierta' a la vez, incluso si dos aperturas de
+    -- caja llegan al mismo tiempo desde dos dispositivos (condición de
+    -- carrera que el chequeo en PHP, por sí solo, no puede evitar).
+    unica_abierta TINYINT GENERATED ALWAYS AS (IF(estado = 'abierta', 1, NULL)) STORED,
+    CONSTRAINT fk_caja_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+    UNIQUE KEY ux_caja_una_abierta (unica_abierta)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;
@@ -228,6 +250,8 @@ INSERT INTO mesas (nombre, capacidad) VALUES
 -- las categorías de ejemplo desde la pantalla de Categorías.
 -- =====================================================================
 
+-- INICIO_CARTA_COMPARABLE (marcador para scripts/comparar_arboles.sh —
+-- no borrar; delimita el bloque que debe ser idéntico en ambos archivos)
 -- Cada categoría se inserta solo si no existe ya una con ese nombre
 -- (INSERT ... SELECT ... WHERE NOT EXISTS). Esto evita duplicar la
 -- categoría "Bebidas" si tu base ya tenía una con ese nombre de los
@@ -378,6 +402,7 @@ INSERT INTO productos (categoria_id, nombre, tipo_venta, precio, stock_actual, s
 ((SELECT id FROM categorias WHERE nombre = 'Cervezas' LIMIT 1), 'Stella Artois de Litro', 'unidad', 9000.00, 12.000, 3.000, 1),
 ((SELECT id FROM categorias WHERE nombre = 'Cervezas' LIMIT 1), 'Heineken de Litro', 'unidad', 9000.00, 12.000, 3.000, 1),
 ((SELECT id FROM categorias WHERE nombre = 'Cervezas' LIMIT 1), 'Andes Roja de Litro', 'unidad', 0.00, 0.000, 0.000, 0); -- PENDIENTE: falta precio, inactivo hasta confirmar
+-- FIN_CARTA_COMPARABLE
 
 -- =====================================================================
 -- MIGRACIÓN (solo necesaria si ya habías importado este archivo antes
@@ -406,3 +431,27 @@ INSERT INTO productos (categoria_id, nombre, tipo_venta, precio, stock_actual, s
 -- ALTER TABLE pedidos ADD COLUMN entregado_en DATETIME NULL AFTER creado_en;
 -- ALTER TABLE pedidos ADD COLUMN entregado_por_id INT UNSIGNED NULL AFTER entregado_en;
 -- ALTER TABLE pedidos ADD CONSTRAINT fk_pedidos_entregado_por FOREIGN KEY (entregado_por_id) REFERENCES usuarios(id);
+
+-- Necesaria si tu base es anterior a la ronda 7 (ver migracion_ronda7.sql
+-- para el detalle completo: precio_a_revisar en productos + índice único
+-- que impide dos cajas abiertas a la vez).
+-- ALTER TABLE productos ADD COLUMN precio_a_revisar TINYINT(1) NOT NULL DEFAULT 0 AFTER activo;
+-- ALTER TABLE caja_sesiones ADD COLUMN unica_abierta TINYINT GENERATED ALWAYS AS (IF(estado = 'abierta', 1, NULL)) STORED;
+-- ALTER TABLE caja_sesiones ADD UNIQUE KEY ux_caja_una_abierta (unica_abierta);
+-- CREATE INDEX idx_pedidos_estado_cerrado ON pedidos(estado, cerrado_en);
+-- ALTER TABLE usuarios ADD COLUMN intentos_fallidos TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER activo;
+-- ALTER TABLE usuarios ADD COLUMN bloqueado_hasta DATETIME NULL AFTER intentos_fallidos;
+
+-- =====================================================================
+-- RONDA 7: marca de "precio a revisar" en los 3 productos cargados con
+-- precio dudoso desde fotos de la carta (ver comentarios "revisar" más
+-- arriba en la sección CARTA REAL). Se muestra como badge de advertencia
+-- en Productos hasta que el dueño confirme el precio real y lo desmarque
+-- a mano desde esa misma pantalla.
+-- =====================================================================
+UPDATE productos SET precio_a_revisar = 1
+WHERE nombre IN (
+    'Costeletas de ternera con papas fritas (2 unidades)',
+    'Papas fritas (bastón) c/cheddar',
+    'Cerro Callejero tinto'
+);

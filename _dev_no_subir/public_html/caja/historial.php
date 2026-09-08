@@ -1,15 +1,27 @@
 <?php
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/paginacion.php';
 requerirLogin();
 
 $pdo = obtenerConexion();
 
-$stmt = $pdo->query("SELECT c.*, u.nombre AS usuario_nombre
-                      FROM caja_sesiones c
-                      JOIN usuarios u ON u.id = c.usuario_id
-                      ORDER BY c.id DESC
-                      LIMIT 100");
+$desde = obtenerFechaGet('desde', date('Y-m-d', strtotime('-30 days')));
+$hasta = obtenerFechaGet('hasta', date('Y-m-d'));
+
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM caja_sesiones WHERE DATE(abierta_en) BETWEEN ? AND ?");
+$stmt->execute([$desde, $hasta]);
+$totalFilas = (int)$stmt->fetchColumn();
+
+$pagina = obtenerPaginaActual();
+$offset = calcularOffset($pagina);
+$stmt = $pdo->prepare("SELECT c.*, u.nombre AS usuario_nombre
+                        FROM caja_sesiones c
+                        JOIN usuarios u ON u.id = c.usuario_id
+                        WHERE DATE(c.abierta_en) BETWEEN ? AND ?
+                        ORDER BY c.id DESC
+                        LIMIT $offset, " . FILAS_POR_PAGINA);
+$stmt->execute([$desde, $hasta]);
 $sesiones = $stmt->fetchAll();
 
 $stmt = $pdo->query("SELECT * FROM caja_sesiones WHERE estado = 'abierta' LIMIT 1");
@@ -28,6 +40,20 @@ require __DIR__ . '/../../includes/header.php';
   <?php endif; ?>
 </div>
 
+<form method="get" action="historial.php" class="row g-2 align-items-end mb-3">
+  <div class="col-auto">
+    <label class="form-label">Desde</label>
+    <input type="date" name="desde" value="<?= h($desde) ?>" class="form-control">
+  </div>
+  <div class="col-auto">
+    <label class="form-label">Hasta</label>
+    <input type="date" name="hasta" value="<?= h($hasta) ?>" class="form-control">
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-primary">Filtrar</button>
+  </div>
+</form>
+
 <div class="table-responsive">
 <table class="table table-striped bg-white shadow-sm">
   <thead>
@@ -37,6 +63,9 @@ require __DIR__ . '/../../includes/header.php';
     </tr>
   </thead>
   <tbody>
+    <?php if (empty($sesiones)): ?>
+      <tr><td colspan="10" class="text-muted">Sin cajas en el rango filtrado.</td></tr>
+    <?php endif; ?>
     <?php foreach ($sesiones as $s): ?>
     <tr>
       <td><?= h(date('d/m/Y H:i', strtotime($s['abierta_en']))) ?></td>
@@ -60,5 +89,6 @@ require __DIR__ . '/../../includes/header.php';
   </tbody>
 </table>
 </div>
+<?= renderPaginacion($pagina, $totalFilas) ?>
 
 <?php require __DIR__ . '/../../includes/footer.php'; ?>
