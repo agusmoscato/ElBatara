@@ -23,9 +23,15 @@ el dueño (que necesita reportes y control de caja).
 - **MySQL / MariaDB** (compatible con MySQL 5.7/8.0 según `database.sql`;
   probado en la práctica contra MariaDB 10.4 de XAMPP).
 - **Sin Composer, sin npm, sin build step.** Todo el JS/CSS es archivo suelto
-  servido directo; las únicas dependencias externas son Bootstrap 5.3.3 (por
-  CDN, sin vendorizar todavía) y Chart.js (vendorizado en `assets/js/chart.umd.min.js`
-  desde la ronda 8).
+  servido directo. Bootstrap 5.3.3 y Chart.js están vendorizados
+  (`assets/vendor/bootstrap-5.3.3/`, `assets/js/chart.umd.min.js` desde la
+  ronda 8) — nota corregida en ronda 14, esta línea decía antes que
+  Bootstrap seguía por CDN "sin vendorizar todavía" y ya no era cierto.
+  La única dependencia externa real hoy es la tipografía (Google Fonts,
+  Fraunces + Work Sans, sumada en la ronda 14 vía `<link>` en
+  `includes/header.php`) — deliberadamente no vendorizada por tiempo; si
+  el local tiene internet inestable, el fallback de la cadena de fuentes
+  en el CSS deja todo legible y funcional igual, sólo cambia la tipografía.
 - **Pensado para hosting compartido de Hostinger sin acceso SSH.** Por eso
   existen dos árboles de código (ver abajo) y por eso las migraciones se
   corren pegando SQL en phpMyAdmin, no con una herramienta de migraciones.
@@ -80,16 +86,68 @@ sincronizar a mano y volver a diffear cada vez que se toca algo en
 
 ## Estado actual, una línea por funcionalidad
 
-- **Login/sesión**: funciona, bcrypt + CSRF + cookies seguras. Sin límite de intentos.
-- **POS / pedidos**: flujo completo abierto→cerrado con cancelación, probado. Riesgo de carrera en stock (ver abajo).
-- **Salón/mesas**: funciona, sin N+1, pinta estado real del pedido asociado. Desde ronda 9 la mesa placeholder "Para Llevar" (capacidad 0) no se muestra en la grilla — ver bug corregido más abajo.
+- **Login/sesión**: funciona, bcrypt + CSRF + cookies seguras. Límite de 5
+  intentos fallidos por CUENTA (bloqueo 5 min, `includes/auth.php`) — nota
+  corregida en ronda 13, esta línea decía antes "sin límite de intentos" y ya
+  no era cierto. Sigue sin límite global por IP (fuera de alcance).
+- **Usuarios (ABM)**: pantalla desde la ronda 16 (`usuarios/listar.php`,
+  requiere el permiso `gestionar_usuarios`) — alta/edición de nombre,
+  usuario, **perfil** (desde la ronda 17, ver abajo — ya no "rol") y
+  activo, más cambio de contraseña por quien gestiona usuarios sin pedir
+  la actual. Antes de la ronda 16 no había forma de crear un usuario nuevo
+  sin tocar la base a mano.
+- **Perfiles (ABM)**: pantalla nueva desde la ronda 17
+  (`perfiles/listar.php`, requiere el permiso `gestionar_perfiles`) —
+  reemplaza el ENUM fijo `rol` ('admin'/'empleado') por perfiles armados a
+  mano con 9 permisos independientes (`ver_caja`, `ver_reportes`, y un
+  `gestionar_*` por cada ABM de Configuración). Cada usuario tiene un
+  `perfil_id`; `esAdmin()`/`requerirAdmin()` ya no existen, todo el
+  sistema chequea `tienePermiso('<permiso>')`. Salón/POS, Stock y Egresos
+  siguen sin gate de permiso (decisión explícita, no un permiso
+  faltante).
+- **POS / pedidos**: flujo completo abierto→cuenta_pedida (opcional)→cerrado
+  con cancelación, probado. La condición de carrera en stock de
+  `agregar_item.php` (nota vieja de esta sección) ya estaba resuelta con
+  `SELECT ... FOR UPDATE` antes de la ronda 13 — corregido acá también,
+  esta línea quedó desactualizada. Desde ronda 13: tocar el mismo producto
+  varias veces suma cantidad en la misma línea en vez de duplicarla, el
+  carrito tiene stepper +/- para productos por unidad, cancelar pide motivo
+  obligatorio, y no se puede crear ni cobrar un pedido sin una caja abierta.
+  Desde ronda 20, el paso intermedio es "Pedir la cuenta" (`estado =
+  'cuenta_pedida'`), no "Enviar a cocina"/"Marcar entregado" — ver "Ronda 20"
+  más abajo, ese flujo viejo de dos pasos se eliminó del todo (el dueño no
+  lo usaba).
+- **Salón/mesas**: funciona, sin N+1, pinta estado real del pedido asociado
+  (Libre/Ocupada/Cuenta pedida, este último un estado real y alcanzable
+  desde ronda 20 — antes de esa ronda el badge "Cuenta pedida" existía
+  visualmente pero ningún código lo poblaba, ver bug corregido en "Ronda 20").
+  Desde ronda 9 la mesa placeholder "Para Llevar" (capacidad 0) no se
+  muestra en la grilla — ver bug corregido más abajo.
 - **Canal mostrador/mesa**: funciona (ronda 8). Acceso rápido a Egresos/Ingresos y egresos sumado al dashboard en ronda 9.
-- **Medios de pago dinámicos**: funciona (ronda 8), ABM completo. Frágil: "Efectivo" se identifica por nombre en `caja/cerrar.php` y `caja/historial.php`, no por ID fijo.
+- **Medios de pago dinámicos**: funciona (ronda 8), ABM completo. Desde
+  ronda 13 el medio "efectivo físico de caja" se identifica con la columna
+  `medios_pago.es_efectivo` (elegible desde una tarjeta nueva en
+  Medios de pago), no por el texto del nombre — la nota vieja de esta
+  sección decía que esto era frágil, ya no lo es.
 - **Stock**: ingresos + historial por producto funcionan. Sin ABM de ajustes manuales negativos.
-- **Caja**: abrir/cerrar/historial funcionan, cálculo recalculado en ronda 8 (probado con diferencia $0 real). Columnas legadas `total_tarjeta`/`total_transferencia` quedan NULL en cierres nuevos, a propósito.
-- **Egresos**: módulo nuevo completo (ronda 8) — carga rápida, listado con filtro y paginación (la única pantalla con paginación real hoy).
-- **Reportes** (ventas, productos top, medios de pago, auditoría, ingresos y egresos): todos funcionan, con filtro de fecha + CSV + impresión. Ingresos y egresos es el más completo (canal + medio + categoría + balance neto + 2 gráficos).
-- **Productos/categorías (ABM)**: funcionan, sin paginación ni filtro (81 productos hoy, no es problema todavía).
+- **Caja**: abrir/cerrar/historial funcionan, cálculo recalculado en ronda 8
+  (probado con diferencia $0 real) y ahora basado en `es_efectivo` (ronda
+  13). Desde ronda 13, cerrar caja pide confirmación y muestra la
+  diferencia en vivo mientras se tipea el monto contado, y
+  `caja/historial.php` (y su acceso del sidebar) pasó a ser solo-admin —
+  cualquier empleado sigue pudiendo abrir/cerrar SU turno desde accesos
+  directos en el dashboard, pero ya no ve el historial financiero completo.
+  Columnas legadas `total_tarjeta`/`total_transferencia` quedan NULL en
+  cierres nuevos, a propósito.
+- **Egresos**: módulo nuevo completo (ronda 8) — carga rápida, listado con
+  filtro y paginación propia (`egresos/listar.php` implementa la suya, no
+  usa los helpers de `includes/paginacion.php`).
+- **Reportes** (ventas, productos top, medios de pago, auditoría, ingresos y egresos): todos funcionan, con filtro de fecha + CSV + impresión. Ingresos y egresos es el más completo (canal + medio + categoría + balance neto + 2 gráficos). Desde ronda 13, ventas/productos top/medios de pago muestran un estado "sin datos" en vez de un gráfico Chart.js en blanco cuando el rango filtrado no tiene resultados.
+- **Productos/categorías (ABM)**: funcionan. `productos/listar.php` **ya
+  tenía paginación real** (`COUNT` + `LIMIT/OFFSET` vía
+  `includes/paginacion.php`) y filtro por categoría/texto antes de esta
+  ronda — la nota vieja de esta sección decía "sin paginación ni filtro" y
+  estaba desactualizada, corregida acá.
 - **Navegación (`includes/header.php`)**: **reemplazada en la ronda 11** —
   ya NO es una navbar horizontal con dropdown. Ver la sección "Ronda 11" más
   abajo para el detalle completo. (Nota histórica: en ronda 9 se había
@@ -102,14 +160,13 @@ sincronizar a mano y volver a diffear cada vez que se toca algo en
 ## Deuda técnica y pendientes conocidos (resumen — detalle en `RELEVAMIENTO.md` sección 10)
 
 - Sin tests automatizados, sin script de pruebas versionado.
-- Sin límite de intentos de login, sin cabeceras HTTP de seguridad (CSP, X-Frame-Options, etc.).
+- Sin límite de intentos de login por IP (sí hay por cuenta, ver arriba), sin cabeceras HTTP de seguridad (CSP, X-Frame-Options, etc.).
 - Bootstrap sigue por CDN (Chart.js ya se vendorizó en ronda 8).
-- Validación de rango de fechas duplicada en 6 reportes; CSRF-para-JSON duplicado en 4 endpoints AJAX.
-- Condición de carrera teórica (no reproducida con test real) en `pedidos/agregar_item.php`: lee `stock_actual` y actualiza sin `SELECT ... FOR UPDATE`.
-- Precios/productos marcados `revisar`/`PENDIENTE` en `database.sql` (líneas 346, 416, 446, 465-471) y falta la categoría "Embutidos curados en grasa de cerdo" (foto ilegible al cargar datos).
-- Migraciones pendientes de verificar contra la base real de Hostinger antes de cada deploy (no se puede chequear desde este entorno).
-- **Todo el trabajo de las rondas 8 a 11 está sin commitear** al momento de escribir esto (2026-09-15/16) — `git status` muestra los archivos modificados/nuevos en working tree, un solo commit total en el repo.
-- Deuda ya identificada en `RELEVAMIENTO.md` (ronda 8) que la ronda 9 **no tocó a propósito** por no ser el foco pedido (UX/copy/lógica de UI, no seguridad ni arquitectura): sin límite de intentos de login, `productos/guardar.php` falla validaciones en silencio sin avisar al usuario, condición de carrera teórica en `agregar_item.php`, Bootstrap sigue por CDN.
+- CSRF-para-JSON duplicado en `pedidos/agregar_item.php` y `pedidos/quitar_item.php` (reimplementan la verificación a mano en vez de usar `validarTokenCsrf()`, porque necesitan responder JSON en vez de la página de error de la ronda 13). Ya NO hay validación de fecha duplicada: los 8 archivos que la usaban centralizaron en `obtenerFechaGet()` en la ronda 13.
+- Precios/productos marcados `revisar`/`PENDIENTE` en `database.sql` (líneas ~350/420/450, buscar `-- revisar` y `-- PENDIENTE`) y falta la categoría "Embutidos curados en grasa de cerdo" (foto ilegible al cargar datos).
+- Migraciones pendientes de verificar contra la base real de Hostinger antes de cada deploy (no se puede chequear desde este entorno) — sumar `migracion_ronda13.sql` a la lista de migraciones a correr si faltan.
+- **Ronda 13 (2026-09-20) no se validó con ejecución real**: esta sesión no tenía PHP ni MySQL/MariaDB disponibles en el entorno (a diferencia de rondas 8-12b) — se buscó `php.exe` en las rutas conocidas, en todo `C:\`, y Docker/WSL como alternativa, sin encontrar nada utilizable. Todos los cambios de esa ronda se hicieron con revisión manual exhaustiva del código (lectura completa de cada archivo tocado, balance de llaves/paréntesis por script, sin `php -l` real) pero **sin levantar el servidor de prueba ni correr el flujo end-to-end**. Antes de subir a producción, correr la checklist completa de la sección de abajo contra un entorno real.
+- Deuda ya identificada en `RELEVAMIENTO.md` (ronda 8) que la ronda 9 **no tocó a propósito** por no ser el foco pedido (UX/copy/lógica de UI, no seguridad ni arquitectura): Bootstrap sigue por CDN. (Las otras 3 cosas que esta línea mencionaba — límite de login, `productos/guardar.php` silencioso, condición de carrera en `agregar_item.php` — ya estaban resueltas antes de la ronda 13, ver arriba.)
 
 ## Cómo se prueba este proyecto
 
@@ -598,6 +655,1139 @@ reproducir este tipo de bug con headless hace falta forzar el foco de forma
 explícita (`DOM.focus` en CDP, o simular Tab): un clic de mouse normal no
 alcanza porque `:focus-visible` lo filtra a propósito.
 
+## Ronda 13 — mejoras de UX/UI y funcionalidad, sistema completo (SIN validar con ejecución real)
+
+El usuario pidió una pasada general de UX/UI y funcionalidad sobre todo el
+sistema, no una pantalla puntual ("mejorá todo el ux ui y lo que se pueda
+mejorar de las funcionalidades"). Se relevó el estado real con dos
+exploraciones en paralelo (UI/UX de las ~20 pantallas + verificación de la
+deuda funcional que `MEMORY.md`/`RELEVAMIENTO.md` daban por pendiente o por
+resuelta — varias notas de ambos documentos estaban desactualizadas en las
+dos direcciones, ver las correcciones más arriba en este archivo) y se armó
+un plan con el usuario antes de tocar código, confirmando explícitamente 4
+decisiones de negocio (no eran bugs, eran elección del dueño):
+
+1. Bloquear la venta sin caja abierta (antes se podía cobrar sin caja
+   abierta y esa plata quedaba fuera de todo cierre).
+2. Pedir motivo obligatorio para cancelar cualquier pedido.
+3. Restringir `caja/historial.php` a admin (antes cualquier empleado veía
+   el historial financiero completo de todos los turnos).
+4. Identificar el medio de pago "Efectivo" por una columna fija en la base
+   en vez de por el texto del nombre (con migración).
+
+**⚠ Esta ronda NO se validó con ejecución real.** El entorno de esta sesión
+no tenía PHP ni MySQL/MariaDB disponibles (se buscó `php.exe` en las rutas
+conocidas de rondas anteriores, en todo `C:\`, y Docker/WSL como
+alternativa — nada utilizable). El usuario, avisado explícitamente de esto
+antes de seguir, pidió continuar solo con revisión manual de código. Se hizo
+la revisión más rigurosa posible sin intérprete: lectura completa de cada
+archivo tocado (no solo el diff), conteo de balance de `{}`/`()` por
+archivo, trazado a mano de cada rama de lógica nueva contra el esquema de
+la base. **Ninguna de estas verificaciones reemplaza `php -l` ni una
+corrida real** — antes de tocar producción hay que levantar el entorno de
+prueba de siempre (ver "Cómo se prueba este proyecto") y correr la
+checklist end-to-end completa, con especial atención a los casos nuevos
+listados en "Validación pendiente" más abajo.
+
+### Cambios de negocio (las 4 decisiones confirmadas)
+
+- **Bloqueo de venta sin caja abierta**: nuevo helper `hayCajaAbierta(PDO $pdo): bool`
+  en `includes/functions.php`. Se usa en `pedidos/nuevo.php` (las dos ramas
+  que CREAN un pedido nuevo — mesa sin pedido previo y "para llevar" — no
+  en la rama que reabre un pedido ya existente, para no dejar a un mozo
+  varado si la caja se cierra mientras carga un pedido) y en
+  `pedidos/cerrar.php` (antes de aceptar el POST de cobro). Si no hay caja
+  abierta, redirige a `caja/abrir.php` con un `flashError()` explicando por
+  qué.
+- **Motivo obligatorio para cancelar**: columna nueva `pedidos.motivo_cancelacion`
+  (`VARCHAR(255) NULL`). `pedidos/nuevo.php` cambió el `confirm()` de
+  `cancelarPedido()` por un `prompt()` que no deja seguir si el motivo
+  queda vacío; `pedidos/cancelar.php` valida de nuevo en el servidor (por
+  si alguien postea directo sin pasar por el JS) y lo guarda.
+  `reportes/auditoria_pedidos.php` suma la columna "Motivo cancelación" a
+  la tabla y al CSV.
+- **`caja/historial.php` solo-admin**: se agregó `requerirAdmin()` (antes
+  solo `requerirLogin()`). Esto rompía el único camino que tenía un
+  empleado no-admin para cerrar SU turno (el botón "Cerrar caja actual"
+  vivía arriba de esa misma página) — se detectó este efecto colateral
+  durante la implementación, no estaba en el plan original, y se corrigió
+  sumando un botón "Cerrar caja" directo en el alert de caja abierta de
+  `dashboard.php` (visible para cualquier usuario logueado, apunta a
+  `caja/cerrar.php` sin pasar por el historial) y sacando el acceso rápido
+  "Historial de caja" del dashboard para no-admin. El link del sidebar
+  "Caja" se movió adentro del bloque `if (esAdmin())`. Abrir caja
+  (`caja/abrir.php`) no se tocó, nunca requirió admin.
+- **Medio de pago "Efectivo" por columna fija**: `medios_pago.es_efectivo`
+  (`TINYINT(1)`, nueva migración `migracion_ronda13.sql`, que marca con `1`
+  el medio que hoy se llama "Efectivo" para no perder el estado actual). En
+  `medios_pago/listar.php` se sumó una tarjeta "¿Cuál medio de pago es el
+  efectivo físico de la caja?" con un `<select>` + botón que hace un swap
+  atómico (`UPDATE ... SET es_efectivo = 0` seguido de
+  `SET es_efectivo = 1 WHERE id = ?`, dentro de `ejecutarTransaccion()`)
+  para garantizar que siempre haya exactamente uno marcado, más un aviso
+  visible si por algún motivo no hay ninguno (o hay más de uno) marcado.
+  `caja/cerrar.php` y `caja/historial.php` dejaron de comparar
+  `mb_strtolower($nombre) === 'efectivo'` y ahora usan la columna.
+
+### POS (`pedidos/nuevo.php` y sus endpoints) — pantalla más usada por los mozos
+
+- **Las cantidades se suman en vez de duplicar la línea**: `pedidos/agregar_item.php`
+  ahora busca (con `SELECT ... FOR UPDATE`, misma protección de carrera que
+  ya tenía el producto) si el producto ya está en el carrito antes de
+  insertar; si existe, hace `UPDATE cantidad = cantidad + ?` en vez de un
+  `INSERT` nuevo. Antes, tocar 3 veces "Empanada de carne" dejaba 3 líneas
+  de 1 unidad en vez de una línea de 3.
+- **Stepper +/- en el carrito** para productos `tipo_venta = 'unidad'`:
+  `pedidos/quitar_item.php` acepta un `cantidad_a_quitar` opcional — si
+  viene y es menor a la cantidad actual del ítem, resta esa porción
+  (`UPDATE`) en vez de borrar la línea entera (`DELETE`, comportamiento
+  original, se sigue usando cuando no se manda el parámetro o cubre toda la
+  cantidad). El botón "+" del carrito llama de nuevo a `agregar_item.php`
+  (ya queda mergeado por el punto anterior). Los productos por peso NO
+  tienen stepper (no tiene sentido un "-1" en kg), siguen con el botón "×"
+  de quitar todo. `obtenerEstadoPedido()` en `includes/functions.php` ahora
+  devuelve también `producto_id`, `tipo_venta` y `cantidad` (numérica, no
+  solo el texto formateado) por ítem, para que el JS decida qué controles
+  mostrar.
+- **Quitar un ítem (botón "×") ya no es una acción sin red de seguridad**:
+  en vez de agregar un `confirm()` bloqueante (se descartó a propósito por
+  ser la acción más frecuente del carrito, un confirm en cada toque
+  frenaría el flujo), se agregó un toast con acción "Deshacer" por 4
+  segundos que vuelve a agregar el mismo producto/cantidad si se toca.
+- **`alert()` nativo reemplazado por el mismo toast que ya usaba el caso de
+  éxito**: las ~6 llamadas a `alert()` de `pedidos/nuevo.php` (stock
+  insuficiente, fallos de red al agregar/quitar/enviar a cocina/marcar
+  entregado) pasan a `mostrarToast(msg, { error: true })`, que agrega la
+  clase `.toast-error` (fondo rojo en vez del bordó de marca) al mismo
+  componente `#toastAgregado` — ya no hay dos idiomas visuales distintos
+  para éxito y error en la misma pantalla. `mostrarToast()` ahora acepta un
+  segundo parámetro de opciones (`error`, `duracionMs`, `accionTexto`/
+  `accionFn` para el caso "Deshacer").
+
+### Caja
+
+- **Confirmación antes de cerrar** (`caja/cerrar.php`): el form de "Cerrar
+  caja" suma un `confirm()` con el monto declarado y la diferencia
+  calculada, mismo patrón que `cancelarPedido()` del POS.
+- **Preview en vivo de la diferencia**: un listener `input` sobre el campo
+  de monto contado calcula y muestra un badge (mismo estilo verde/rojo/gris
+  de sobra/falta/exacto que ya usa `caja/historial.php`) sin recargar la
+  página, reusando `$efectivoEsperado` (ya calculado en PHP) expuesto como
+  constante JS vía `json_encode()`.
+
+### Reportes
+
+- **Estado "sin datos"** en `reportes/ventas.php`, `reportes/productos_top.php`
+  y `reportes/medios_pago.php` (los únicos 3 que no lo tenían de los 5
+  reportes con gráfico/tabla): mensaje `text-muted` en vez de mostrar una
+  tabla vacía y un `<canvas>` de Chart.js en blanco cuando el rango
+  filtrado no tiene resultados — el bloque entero de tabla+gráfico+`<script>`
+  de Chart.js queda condicionado a `!empty($filas)`.
+- **Validación de fecha centralizada**: los 5 archivos que todavía repetían
+  `preg_match('/^\d{4}-\d{2}-\d{2}$/', ...)` a mano (`egresos/listar.php`,
+  `reportes/ventas.php`, `reportes/productos_top.php`,
+  `reportes/medios_pago.php`, `reportes/ingresos_egresos.php`) pasaron a
+  usar `obtenerFechaGet()` de `includes/paginacion.php` (cada uno sumó el
+  `require_once` correspondiente), igual que ya hacían los otros 3
+  reportes/pantallas con filtro de fecha. Reutilización pura, sin cambio de
+  comportamiento.
+
+### ABMs de configuración (mesas, categorías, medios de pago, categorías de egreso)
+
+- **Feedback de error y de éxito al guardar**: nuevo helper `flashExito()`
+  (mismo mecanismo que `flashError()` ya existente, sesión + impresión una
+  vez desde `includes/header.php` vía `mostrarFlashExito()`). Los 4 ABMs
+  simples sumaron un `else { flashError('El nombre no puede estar vacío.'); }`
+  al `if ($nombre !== '')` que antes fallaba en silencio, y
+  `flashExito('Guardado correctamente.')` en la rama de éxito. `mesas/listar.php`
+  también suma validación de servidor para `capacidad >= 0` (antes solo la
+  validaba el `min="0"` del HTML).
+- **Errores de base de datos ya no revientan la página en blanco**: los 4
+  ABMs simples + `productos/guardar.php` envuelven el `execute()` en
+  `try/catch (PDOException $e)` con un `flashError()` genérico.
+
+### Productos
+
+- **`productos/guardar.php` ya no pierde lo tipeado en un error de
+  validación**: guarda `$_POST` (sin `csrf_token`) en
+  `$_SESSION['flash_form_producto']` antes de cada `flashError()` +
+  `redirigir()`. `productos/listar.php` lee esa variable de sesión (y la
+  limpia), y si existe reabre el modal correspondiente (nuevo o editar,
+  según si había `id`) prellenado con esos datos vía JS al cargar la
+  página, reusando el mismo bootstrap.Modal.
+
+### Seguridad / robustez transversal
+
+- **CSRF vencido ya no deja una pantalla en blanco**: `validarTokenCsrf()`
+  en `includes/functions.php` ya no hace `die('texto plano')` — llama a
+  `mostrarErrorCsrf()`, una función nueva que hace `require __DIR__ . '/header.php'`
+  (mismo archivo, sin ajuste de ruta porque `__DIR__` es relativo a
+  `includes/` en los dos árboles) para renderizar una página mínima con el
+  sidebar (si la sesión sigue viva) y un botón "Volver al inicio", en vez
+  de texto crudo del navegador.
+- **CSV formula injection**: `exportarCsv()` en `includes/functions.php`
+  ahora antepone un apóstrofo a cualquier campo que empiece con `=`, `+`,
+  `-`, `@`, tab o retorno de carro (`sanitizarCampoCsv()`), para que texto
+  libre cargado por un usuario (ej. la descripción de un egreso) no se
+  interprete como fórmula al abrir el CSV en Excel/Sheets.
+- **`pedidos/nuevo.php`**: la rama que crea un pedido de mesa (dentro de
+  `elseif ($mesaId)`) migró de `beginTransaction()`/`commit()` manual a
+  `ejecutarTransaccion()`, el único lugar del sistema con transacción que
+  todavía no usaba el helper.
+
+### Versión de CSS
+
+`$versionCss` subido a `20260920-r14` en `includes/header.php` (ambos
+árboles) por los cambios nuevos en `assets/css/style.css` (`.toast-error`,
+`.toast-accion`, `.stepper-cantidad`).
+
+### Validación pendiente (para la próxima sesión con PHP/MySQL disponibles)
+
+Checklist mínima antes de dar esta ronda por realmente terminada (además de
+la checklist end-to-end estándar de la sección "Cómo se prueba este
+proyecto"):
+
+- [ ] `php -l` sobre los 21 archivos PHP tocados en ambos árboles (nunca se
+      corrió esta ronda — solo revisión manual + conteo de llaves/paréntesis).
+- [ ] Importar `database.sql` limpio Y por separado probar
+      `migracion_ronda13.sql` sobre una copia de una base ronda-8 (sin las
+      columnas nuevas) para confirmar que agrega `es_efectivo` y
+      `motivo_cancelacion` sin error.
+- [ ] POS: tocar el mismo producto por unidad 3 veces seguidas y confirmar
+      que el carrito queda con UNA línea de cantidad 3 (no 3 líneas), que el
+      stock descontado es igual a antes, y que el "-" del stepper resta de a
+      1 sin borrar la línea hasta llegar a 0.
+- [ ] Cancelar un pedido sin escribir motivo (tocar "Cancelar" en el
+      `prompt()` vacío o cancelarlo) y confirmar que NO cancela; cancelar con
+      motivo y confirmar que aparece en `reportes/auditoria_pedidos.php`.
+- [ ] Intentar crear un pedido nuevo y cobrar uno existente con la caja
+      cerrada, confirmar que ambos bloquean con mensaje claro y redirigen a
+      abrir caja.
+- [ ] Renombrar el medio "Efectivo" desde Medios de pago y confirmar que el
+      cálculo de caja sigue funcionando idéntico (ya no depende del nombre);
+      probar el swap de "efectivo de caja" a otro medio y de vuelta.
+- [ ] Confirmar con un usuario NO admin que `caja/historial.php` redirige
+      (no debería poder verlo) pero que SÍ puede abrir y cerrar su propia
+      caja desde los accesos del dashboard.
+- [ ] Cerrar caja: confirmar que el preview de diferencia en vivo coincide
+      con el que calcula el servidor, y que el `confirm()` aparece antes de
+      enviar.
+- [ ] Exportar un CSV de egresos con una descripción que empiece con `=` y
+      confirmar (abriendo el archivo) que no se interpreta como fórmula.
+- [ ] Forzar un CSRF inválido en un formulario HTML (no un endpoint JSON) y
+      confirmar que la página de error nueva se ve bien y el link "Volver al
+      inicio" funciona.
+- [ ] `diff` real (no visual) de los 21 archivos + `style.css` entre
+      `_dev_no_subir/public_html` y `DEPLOY_HOSTINGER`, y barrido de BOM/mojibake
+      en ambos árboles completos.
+
+### Lección de esta ronda (entorno sin PHP/MySQL)
+
+Ver la entrada nueva en "Errores ya cometidos" más abajo sobre `sed`
+convirtiendo CRLF a LF en este entorno — relevante si una sesión futura
+también se queda sin intérprete PHP disponible y necesita sincronizar los
+árboles con herramientas de texto en vez de copiar y editar con
+`Read`/`Edit`.
+
+## Ronda 14 — reskin visual del sistema real para que coincida con un mockup aprobado por el cliente (SIN validar con ejecución real)
+
+El usuario pidió primero un mockup clickeable (sin backend, datos de
+ejemplo) para mostrarle al dueño del negocio cómo podía verse/usarse el
+sistema, y después de aprobarlo pidió explícitamente "usá eso para que el
+sistema quede igual a eso" — aplicar esa identidad visual al sistema PHP
+real (no al revés).
+
+**El mockup se armó como un Artifact de Claude (tipo "Design", canvas
+clickeable), no como parte de este repo.** Vive en
+`https://claude.ai/artifact/74eaTDLruwNAcMCSBHFNWW` — privado, solo lo abre
+quien tenga el link o a quien se lo compartan desde ahí. Son 7 pantallas
+estáticas con datos de ejemplo (Inicio, Salón, POS, Caja, Reportes,
+Productos, Egresos) que **no tocan la base de datos ni el código real**:
+sirven como referencia de diseño, no como código a copiar literal. Si se
+pierde el link, se puede volver a armar pidiendo lo mismo, pero el criterio
+de diseño que se usó queda documentado en esta sección para no tener que
+inferirlo de nuevo mirando capturas.
+
+### Qué significa "igual" acá (alcance real de esta ronda)
+
+Rehacer el HTML de cada pantalla real para calcar pixel a pixel el mockup
+hubiera sido un cambio enorme y de altísimo riesgo sin poder renderizar
+nada (ver el problema de entorno de la ronda 13, que seguía vigente en
+esta). En cambio, se hizo un **reskin a nivel de sistema de diseño**: los
+mismos tokens (tipografía, paleta, radios, sombras, forma de las badges)
+que el mockup usa, aplicados como reglas globales de CSS + un ajuste chico
+de `header.php`, para que TODAS las pantallas cambien de aspecto a la vez
+sin tocar el HTML/PHP de cada una. Esto cubre la mayor parte de la
+diferencia visual real (el sistema real ya comparte la misma paleta bordó
+de marca y la misma estructura de sidebar/cards/tablas que el mockup,
+recién de la ronda 11 en adelante) con el mínimo de riesgo posible.
+**No** se tocó el layout/contenido de ninguna pantalla — highlights de
+diseño muy específicos del mockup (el logo circular "EB", el gráfico de
+torta con conic-gradient, el card de "cuál medio es efectivo") no tienen
+equivalente 1 a 1 en el sistema real y no se intentó forzarlos.
+
+### Cambios aplicados (ambos árboles)
+
+- **Tipografía**: `includes/header.php` suma un `<link>` a Google Fonts
+  (Fraunces + Work Sans, las mismas dos fuentes del mockup) antes del
+  `<link>` de `style.css`. En `style.css`, `body` pasa a `font-family:
+  'Work Sans'...` y los títulos (`h1`-`h6`, `.card-title`,
+  `.sidebar-brand-text`, `.mesa-card`, `.fs-3` — esta última es la clase
+  que ya usaban los números grandes de "Pedidos cerrados hoy"/"Total
+  vendido hoy" en el dashboard) pasan a `font-family: 'Fraunces'...`.
+  **Única dependencia externa no vendorizada del sistema** (ver nota
+  corregida más arriba, sección "Stack y restricciones") — decisión
+  consciente, no descuido: vendorizar tipografías (bajar los `.woff2`,
+  hostearlos en `assets/fonts/`, armar el `@font-face`) es más trabajo y
+  no había forma de probarlo en este entorno sin PHP; el fallback de la
+  cadena de fuentes (`Georgia, serif` / `sans-serif`) deja todo legible
+  igual si el link no carga. Si el cliente pide que no haya NINGUNA
+  dependencia externa (ej. el local tiene internet muy inestable), es un
+  cambio puntual a futuro: bajar las dos fuentes y vendorizarlas.
+- **Tarjetas, botones, badges e inputs más redondeados y con sombra
+  suave**: nuevo bloque al final de `style.css` (marcado "RONDA 14") que
+  agrega `border-radius`/`box-shadow` globales a `.card` (14px + sombra en
+  vez del borde plano de Bootstrap), `.badge` (999px, ahora sí una
+  píldora completa), `.btn` (10px), `.alert` (12px) y
+  `.form-control`/`.form-select` (9px). Los colores semánticos de los
+  badges (verde/rojo/gris de estado) **no se tocaron a propósito** — la
+  nota que ya existía en el archivo sobre esto sigue vigente, este reskin
+  solo cambió la forma, no el significado de los colores.
+- **Tablas**: texto en tono secundario marrón-grisáceo (`--texto-secundario:
+  #7c6c5d`, nuevo token) en vez de negro puro, y encabezados en mayúsculas
+  chicas con tracking — mismo aire "editorial" que las tablas del mockup.
+  El fondo/color de encabezado de marca que ya existía (ronda 9) no se
+  tocó.
+- **Sidebar**: `includes/header.php` suma un subtítulo "Panel de gestión"
+  debajo de "El Batará" en el bloque de marca (mismo patrón que el
+  logo/subtítulo del mockup), envuelto en un `<span class="sidebar-brand-textos">`
+  nuevo (columna: nombre + subtítulo). Se oculta junto con el resto de las
+  etiquetas cuando el sidebar está colapsado a solo íconos (mismo
+  mecanismo que ya ocultaba `.sidebar-brand-text`, ronda 11).
+- **Nuevos tokens en `:root` de `style.css`**: `--borde-suave`,
+  `--texto-secundario`, `--sombra-tarjeta`. Se sumaron sin tocar ni
+  renombrar ninguno de los `--marca-*` ya existentes (`--marca-principal`
+  sigue siendo el mismo `#8B2E2E` de siempre, es el mismo tono que usa el
+  mockup) para no arriesgar romper las reglas del sidebar/POS de rondas
+  anteriores que ya los usan.
+- `$versionCss` subido a `20260920-r15` en `includes/header.php` (ambos
+  árboles) para invalidar el caché del navegador.
+
+### Lo que NO se tocó (a propósito, para no ampliar el riesgo sin poder validar)
+
+`PALETA_GRAFICOS` de los 4 reportes con gráfico (ya bastante alineada con
+la paleta del mockup, ver ronda 10), el layout/HTML de cualquier pantalla,
+el logo real (`assets/img/logo.png`, si existe) ni su fallback circular
+(`.logo-texto`, usado también en `login.php` sobre un fondo distinto al
+del sidebar — cambiarlo sin poder ver el resultado real era más riesgo que
+beneficio).
+
+### Validación — MISMO problema de entorno que la ronda 13
+
+Esta ronda tampoco se pudo validar con ejecución real: seguía sin haber
+PHP/MySQL/navegador disponibles en esta sesión (ver la entrada de la ronda
+13 y la de "Errores ya cometidos" sobre esto). Se revisó a mano el HTML
+final de `header.php` completo y se contó el balance de `{`/`}` de
+`style.css` (140/140), además del barrido habitual de BOM/mojibake en los
+dos archivos tocados en ambos árboles (ninguno encontrado) y un `diff`
+byte a byte confirmando que quedaron idénticos entre `_dev_no_subir` y
+`DEPLOY_HOSTINGER`. **Ninguna de estas verificaciones reemplaza abrir el
+sistema real en un navegador.** Antes de mostrárselo al cliente como
+versión final (no solo el mockup), hay que:
+
+- [ ] Abrir al menos Inicio, Salón, POS, Caja y un reporte con gráfico en
+      un navegador real y confirmar que Fraunces/Work Sans cargan (si no
+      hay internet en el momento, confirmar que el fallback se ve
+      prolijo igual, no roto).
+- [ ] Confirmar que ninguna tarjeta/tabla angosta quedó con texto
+      desbordado por el cambio de tipografía (Fraunces es más ancha que
+      la fuente de sistema que usaba Bootstrap antes) — el punto más
+      probable son los `<h2>` largos de reportes ("Auditoría de pedidos
+      (cobros y cancelaciones)") y las tarjetas del dashboard en celular.
+- [ ] Confirmar visualmente el subtítulo "Panel de gestión" del sidebar en
+      los 3 tamaños de pantalla (desktop, tablet, celular con offcanvas).
+      **Nota ronda 15**: el "modo colapsado a íconos" que mencionaba este
+      punto originalmente ya no existe — se sacó en la ronda 15, ver esa
+      sección más abajo.
+- [ ] Comparar de cerca contra el mockup (`https://claude.ai/artifact/74eaTDLruwNAcMCSBHFNWW`)
+      y decidir con el usuario si algún detalle puntual más (ej. el
+      degradé cónico del gráfico de torta, el logo circular) vale la pena
+      llevarlo al sistema real en una próxima ronda, ahora que la base
+      tipográfica/de tarjetas ya está alineada.
+
+## Ronda 15 — editar egresos, favicon con el logo, sidebar ya no se puede colapsar (SIN validar con ejecución real)
+
+Pedido corto y directo del usuario, tres puntos:
+
+### 1. Egresos: ahora se pueden editar (antes solo se podían crear)
+
+`egresos/listar.php` no tenía forma de corregir un egreso ya cargado (error
+de tipeo en la descripción, monto mal puesto, categoría equivocada) — solo
+`nuevo.php` (crear) y el listado (ver). Se agregó:
+
+- **`egresos/guardar.php`** (archivo nuevo): recibe el POST del modal de
+  edición, valida los mismos campos que `nuevo.php` (categoría, medio de
+  pago, monto > 0, descripción no vacía) y hace el `UPDATE`. A propósito
+  **no** exige que la categoría/medio de pago elegidos sigan activos (a
+  diferencia de `nuevo.php`, que sí lo exige para altas nuevas) — un
+  egreso viejo puede tener una categoría que se desactivó después, y
+  forzar a cambiarla para poder corregir otro campo cualquiera sería un
+  obstáculo que nadie pidió. Sigue el mismo patrón de `productos/guardar.php`
+  (`flashError`/`flashExito`, `try/catch` con mensaje genérico).
+- **`egresos/listar.php`**: cada fila suma un botón "Editar" (columna
+  nueva, `no-imprimir`) que abre un modal (`#modalEgreso`, mismo patrón
+  que el modal de `productos/listar.php`) prellenado vía JS
+  (`editarEgreso(e)`) con los datos de esa fila, con `<select>` de
+  categoría/medio de pago (a diferencia del grillado de chips táctiles de
+  `nuevo.php`, pensado para carga rápida de mozo — acá es una corrección
+  puntual, un select alcanza) que muestra también las categorías/medios
+  inactivos marcados `(inactiva)`/`(inactivo)` para no perder de vista
+  cuál era el valor real si ya no está en la lista activa.
+- **Nota para quien lo use**: editar un egreso que pertenece a una caja YA
+  CERRADA no recalcula retroactivamente los totales de ese cierre
+  (`caja_sesiones`/`caja_sesion_medios` quedan con la foto tomada al
+  momento de cerrar, no se recomputan solos) — mismo comportamiento que ya
+  tiene el resto del sistema con los cierres de caja (son un snapshot, no
+  un valor vivo). No se restringió la edición por esto porque no era parte
+  de lo pedido; si hace falta bloquear editar egresos de cajas cerradas,
+  es un cambio puntual a futuro.
+- **Permisos**: igual que crear/ver egresos, cualquier usuario logueado
+  puede editar cualquier egreso (`requerirLogin()`, no `requerirAdmin()`)
+  — no se agregó una restricción extra porque no se pidió.
+
+### 2. Favicon con el logo real
+
+`includes/header.php` suma `<link rel="icon" type="image/png" href="<?= $base ?>assets/img/logo.png">`
+en el `<head>`, antes del CSS de Bootstrap. Como `login.php` también
+`require`ea este mismo `header.php`, la pantalla de login también queda
+con el favicon — un solo lugar para las dos. Se confirmó que
+`assets/img/logo.png` existe de verdad en disco en los dos árboles (no es
+el caso del placeholder "logo no subido todavía" que documentan otras
+partes del sistema) antes de agregar el link.
+
+### 3. El sidebar ya NO se puede colapsar a solo íconos (se sacó la ronda 11)
+
+El usuario reportó que "esconder la navbar" no andaba bien y pidió
+directamente que no se pudiera esconder, punto — no pidió que se
+arreglara el bug, pidió sacar la función. Se interpretó "esconder la
+navbar" como el botón "«" de colapsar a solo íconos agregado en la ronda
+11 (pensado para tablet/POS), **no** como el offcanvas de celular
+(hamburguesa que abre/cierra el sidebar en pantallas <768px) — ese
+mecanismo es necesario para que el sistema se pueda usar en celular en
+absoluto (sin él no hay forma de navegar en una pantalla chica) y no se
+tocó.
+
+Se sacó por completo:
+- El botón `#btnColapsarSidebar` y su ícono `«` de `includes/header.php`.
+- Los dos `<script>` asociados: el que aplicaba la clase `sidebar-collapsed`
+  al `<body>` ANTES de pintar (para evitar parpadeo) leyendo
+  `localStorage`, y el que escuchaba el click del botón y guardaba el
+  estado en `localStorage` (`elbatara_sidebar_colapsado`).
+- En `assets/css/style.css`: la clase `.sidebar-collapse-btn` (con su
+  `:hover`/`:focus-visible`, este último agregado recién en la ronda 12b
+  para el bug del contorno de foco — ya no aplica, no hay botón), 
+  `.sidebar-toggle-icon`, la variable `--sidebar-width-collapsed`, y las
+  ~10 reglas `body.sidebar-collapsed ...` dentro del
+  `@media (min-width: 768px)` (ancho colapsado del sidebar, ocultar
+  etiquetas/chevrons/subtítulo, centrar íconos, ocultar submenús). El
+  sidebar ahora es **siempre** de `--sidebar-width` (226px) completo desde
+  768px en adelante, sin ninguna forma de angostarlo.
+- Se buscó explícitamente en todo el árbol cualquier referencia residual
+  a `sidebar-collapsed`/`sidebar-collapse-btn`/`sidebar-toggle-icon`/
+  `elbatara_sidebar_colapsado`/`btnColapsarSidebar`/`sidebar-width-collapsed`
+  (`grep -rn` sobre `public_html` e `includes`) — no quedó ninguna.
+- **Efecto en el trade-off de la ronda 11**: esa ronda documentaba que en
+  tablet (820px) el panel "Pedido actual" del POS quedaba muy angosto con
+  el sidebar expandido, y que colapsarlo a íconos lo aliviaba. Esa válvula
+  de escape ya no existe — si el POS en tablet vuelve a sentirse apretado,
+  hay que resolverlo de otra forma (por ejemplo angostando el sidebar fijo
+  en general, o ajustando el layout del POS en ese rango de ancho), no
+  reintroduciendo el botón de colapsar sin que el usuario lo pida de
+  nuevo.
+- `$versionCss` subido a `20260920-r16` en `includes/header.php` (ambos
+  árboles) — dos bumps en esta misma sesión: `r15` después del favicon,
+  `r16` después de sacar el sidebar colapsable, para que el navegador
+  invalide el caché con el contenido final.
+
+### Validación — mismo problema de entorno que las rondas 13 y 14
+
+Otra vez sin PHP/MySQL/navegador en esta sesión. Revisión manual completa
+de los 4 archivos tocados (`header.php`, `style.css`, `egresos/listar.php`,
+`egresos/guardar.php` nuevo) más balance de `{`/`}`/`(`/`)` por archivo,
+`grep` de verificación de que no quedó ninguna referencia rota a la
+función de colapsar, barrido de BOM/mojibake en ambos árboles (ninguno
+encontrado) y `diff` de contenido ignorando únicamente la profundidad
+esperada de `../` y el fin de línea CRLF/LF (`egresos/guardar.php` se
+creó con la herramienta de escritura en LF y se pasó a CRLF con
+`unix2dos` para que coincida con la convención del resto del árbol — ver
+la lección de la ronda 13 sobre por qué esto importa). **Sigue sin
+reemplazar abrir el sistema real en un navegador.** Antes de dar esto por
+terminado:
+
+- [ ] Editar un egreso real desde el modal nuevo y confirmar que el
+      `UPDATE` se ve reflejado en el listado y (si corresponde) en el CSV
+      exportado.
+- [ ] Confirmar que el favicon con el logo aparece en la pestaña del
+      navegador, en login y ya logueado.
+- [ ] Confirmar en desktop/tablet que el sidebar ya no tiene ningún botón
+      ni forma de colapsarse, y que en celular la hamburguesa sigue
+      abriendo/cerrando el offcanvas normalmente (eso NO se tocó, pero
+      conviene reconfirmar después de sacar los otros scripts del mismo
+      archivo).
+
+## Ronda 16 — ABM de usuarios (alta, rol, activo, cambio de contraseña por admin) (SIN validar con ejecución real)
+
+El usuario preguntó cómo crear usuarios nuevos con rol. Antes de esta
+ronda **no existía ninguna pantalla para eso**: la tabla `usuarios` (con
+`rol` ENUM admin/empleado, `activo`, `intentos_fallidos`/`bloqueado_hasta`
+ya en `database.sql` desde antes) solo se podía tocar a mano por SQL, y ni
+siquiera `INSTALL.md` documentaba cómo generar el hash bcrypt sin PHP. Se
+confirmó la ausencia con `find`/`grep` antes de asumir que faltaba. El
+usuario confirmó explícitamente que quería que se construyera la pantalla
+(no solo la instrucción de SQL a mano).
+
+### Qué se agregó
+
+**Pantalla nueva `usuarios/listar.php`** (solo admin, `requerirAdmin()`),
+sumada al grupo "Configuración" del sidebar (`includes/header.php`,
+después de "Categorías de egreso"). Sigue el mismo patrón self-posting con
+múltiples `accion` que ya usa `medios_pago/listar.php` desde la ronda 13:
+
+- **`accion=guardar`** (alta o edición de nombre/usuario/rol/activo):
+  - Alta: pide nombre, usuario (login), contraseña (mínimo 6 caracteres,
+    mismo mínimo que ya exigía `cambiar_password.php`) y rol, con
+    `password_hash(..., PASSWORD_DEFAULT)` — la única forma correcta de
+    generarlo, que era justamente lo que faltaba para poder hacerlo a mano
+    sin PHP.
+  - Edición: fila inline por usuario (mismo patrón visual que
+    mesas/categorías/medios de pago — inputs con `form="..."` apuntando a
+    un `<form>` oculto por fila) para nombre/usuario/rol/activo. **No**
+    toca la contraseña (eso es la acción de abajo). De paso resetea
+    `intentos_fallidos`/`bloqueado_hasta` a cada guardado — si el admin
+    está tocando ese usuario, es un buen momento para destrabarlo si
+    estaba bloqueado por intentos fallidos.
+  - Choque de `usuario` UNIQUE (constraint ya existía en `database.sql`):
+    capturado como `PDOException` código `23000` con mensaje específico
+    "Ese nombre de usuario ya existe." en vez del genérico, mismo patrón
+    que ya usa `caja/abrir.php` para su propio índice único.
+- **`accion=cambiar_password`**: modal aparte (`#modalPassword`, botón
+  "Contraseña" por fila) que le pone una contraseña nueva a cualquier
+  usuario **sin pedir la actual** (a diferencia de `cambiar_password.php`,
+  que sigue existiendo tal cual para que cada uno cambie la propia
+  pidiendo la actual) — mismo mínimo de 6 caracteres + confirmación.
+- **Protección contra auto-bloqueo** (agregada sin que se pidiera
+  explícitamente, pero es un riesgo real y evidente en cuanto se construye
+  esta pantalla): un admin no puede, desde acá, desactivar su propio
+  usuario ni sacarse a sí mismo el rol admin — no hay recuperación de
+  contraseña por mail en este sistema, así que esa sería una forma fácil
+  de quedar afuera del sistema sin ninguna otra puerta de entrada salvo
+  tocar la base a mano. Doble capa: el `<select>`/checkbox de la propia
+  fila queda `disabled` en el HTML (con un input oculto que manda el valor
+  actual igual, porque un campo `disabled` no se envía en el POST) **y**
+  la validación del lado del servidor en `guardar.php`... en este caso
+  dentro del mismo `listar.php` vuelve a chequear
+  `$id === $_SESSION['usuario_id']` — el chequeo real es el del servidor,
+  el `disabled` es solo para no invitar a hacer clic en algo que va a
+  fallar. No se agregó protección equivalente para "no dejar sin ningún
+  admin activo en todo el sistema" (un admin sí puede desactivar a OTRO
+  admin, incluso si es el último) — no se pidió y hubiera significado
+  contar admins activos en cada guardado; queda como límite conocido.
+- Columna "Estado" con badge "Bloqueado" (si `bloqueado_hasta` sigue en el
+  futuro) o "Vos" (fila del usuario logueado), para que el admin vea de un
+  vistazo si alguien quedó trabado por el límite de intentos de
+  `includes/auth.php` sin tener que ir a la base a mirar.
+- No hay borrado de usuarios (mismo criterio que el resto de los ABMs:
+  desactivar, no borrar, para no perder la referencia en el historial de
+  pedidos/cierres/egresos que ya tienen ese `usuario_id` cargado).
+
+### Validación — mismo problema de entorno que las rondas 13, 14 y 15
+
+Sin PHP/MySQL/navegador en esta sesión, otra vez. Revisión manual completa
+del archivo nuevo (216 líneas) y del `header.php` tocado, balance de
+`{`/`}`/`(`/`)` en ambos, `diff` de contenido entre árboles ignorando la
+profundidad de `../` y el fin de línea (mismo `unix2dos` de la ronda 13
+para que el archivo nuevo quede en CRLF como el resto del árbol), barrido
+de BOM/mojibake (ninguno). **No se probó el flujo real.** Antes de usar
+esto en producción:
+
+- [ ] Crear un usuario nuevo empleado y confirmar que puede loguearse con
+      la contraseña puesta.
+- [ ] Crear un usuario admin nuevo y confirmar que ve las pantallas de
+      admin (Reportes, Configuración, Caja).
+- [ ] Con la cuenta propia, confirmar que el select de rol y el switch de
+      activo de la propia fila aparecen deshabilitados, y que un POST
+      directo forzando `activo=0` o `rol=empleado` sobre el propio id
+      igual lo rechaza el servidor (no confiar solo en el `disabled` del
+      HTML).
+- [ ] Usar "Contraseña" para resetear la de otro usuario y confirmar que
+      ese usuario ya no puede entrar con la vieja pero sí con la nueva.
+- [ ] Provocar un bloqueo por intentos fallidos (5 intentos con contraseña
+      mal puesta) y confirmar que el badge "Bloqueado" aparece, y que
+      guardar esa fila (o cambiarle la contraseña) lo destraba.
+- [ ] Intentar crear dos usuarios con el mismo `usuario` (login) y
+      confirmar el mensaje específico "Ese nombre de usuario ya existe."
+
+## Ronda 17 — perfiles de acceso configurables, reemplaza el ENUM admin/empleado (SIN validar con ejecución real)
+
+El usuario pidió no seguir atado a solo "admin"/"empleado": quería armar
+perfiles a mano (ej. "Mozo", "Cajero") eligiendo qué partes del sistema
+tiene habilitadas cada uno. Se acordó el alcance explícitamente antes de
+tocar código (ver pregunta hecha al usuario): los permisos nuevos cubren
+**solo** las 9 áreas que ya estaban restringidas a "admin" antes de esta
+ronda (Caja/historial, Reportes, y los ABMs de Configuración, incluido el
+nuevo Perfiles). Salón/POS, Stock y Egresos siguen disponibles para
+cualquier usuario logueado, sin permiso propio — decisión explícita del
+usuario, no un olvido.
+
+### Modelo de datos
+
+**Tabla nueva `perfiles`**: un booleano por permiso (no una tabla de join
+— más simple de armar como ABM de checkboxes, mismo criterio que
+`medios_pago.es_efectivo` de la ronda 13). Columnas: `nombre`, `activo`, y
+9 permisos: `ver_caja`, `ver_reportes`, `gestionar_productos`,
+`gestionar_categorias`, `gestionar_mesas`, `gestionar_medios_pago`,
+`gestionar_egresos_categorias`, `gestionar_usuarios`, `gestionar_perfiles`.
+
+`usuarios` suma `perfil_id INT UNSIGNED NULL` (FK a `perfiles`). **La
+columna `usuarios.rol` (ENUM admin/empleado) NO se borró** — se dejó a
+propósito para no forzar un `DROP COLUMN` en la base real de producción,
+pero **desde esta ronda no se lee en ningún lado del código**. Si una
+sesión futura ve `rol` en una fila de `usuarios`, es dato histórico
+inerte; la fuente de verdad de permisos es `perfil_id` + la tabla
+`perfiles`.
+
+`database.sql` (instalación nueva) siembra dos perfiles que reproducen
+exactamente el alcance viejo — "Administrador" (los 9 permisos en 1) y
+"Empleado" (los 9 en 0) — y asigna `perfil_id` a los 2 usuarios de
+ejemplo. `migracion_ronda17.sql` (para la base real ya en producción) hace
+lo mismo en 3 pasos: crea `perfiles` + siembra los dos perfiles, agrega
+`usuarios.perfil_id` (sin la FK todavía) y lo completa según el `rol`
+actual de cada usuario existente, y recién al final agrega la FK — en ese
+orden para que la constraint no falle contra filas todavía no pobladas.
+
+### `includes/auth.php` — `tienePermiso()`/`requerirPermiso()` reemplazan a `esAdmin()`/`requerirAdmin()`
+
+- `iniciarSesion()`: el `SELECT` ahora hace `LEFT JOIN perfiles` (no
+  `INNER JOIN` — si un usuario quedara sin `perfil_id`, sigue pudiendo
+  loguearse, pero con la sesión armada con todos los permisos en `false`,
+  fail-closed, en vez de que el login se rompa). Guarda en sesión
+  `$_SESSION['perfil_id']`, `$_SESSION['perfil_nombre']` y
+  `$_SESSION['permisos']` (array asociativo de los 9 booleanos).
+- `tienePermiso(string $permiso): bool` y `requerirPermiso(string $permiso): void`
+  (esta última llama a `requerirLogin()` primero, igual que hacía
+  `requerirAdmin()`) son las funciones nuevas. Los 13 archivos que antes
+  llamaban `requerirAdmin()` pasan cada uno a `requerirPermiso('<permiso
+  que corresponde>')` — cambio mecánico, un `grep` confirmó al final que
+  no quedó ningún `esAdmin()`/`requerirAdmin()`/`usuario_rol` real en todo
+  el árbol (solo 2 menciones en comentarios explicando el reemplazo).
+
+### `includes/header.php` — sidebar ítem por ítem, no por bloque
+
+Antes todo el bloque Caja+Reportes+Configuración estaba atrás de un solo
+`<?php if (esAdmin()): ?>`. Ahora cada ítem se muestra según su propio
+`tienePermiso()`: el link "Caja" atrás de `ver_caja`, el grupo "Reportes"
+atrás de `ver_reportes` (adentro no cambió, los 5 reportes comparten un
+solo permiso), y dentro de "Configuración" cada sub-ítem (Productos,
+Categorías, Mesas, Medios de pago, Categorías de egreso, Usuarios,
+**Perfiles nuevo**) se arma según su propio permiso — el grupo
+"Configuración" entero (botón + submenú) solo aparece si al menos uno de
+esos 7 está habilitado. El pie del sidebar muestra
+`$_SESSION['perfil_nombre']` en vez de `$_SESSION['usuario_rol']`.
+
+### `dashboard.php`
+
+Los 5 usos de `esAdmin()` se repartieron por permiso específico en vez de
+seguir todos juntos: alerta de stock bajo → `gestionar_productos`;
+resumen del día (pedidos/total vendido hoy) → `ver_reportes`; los 3
+accesos rápidos (Historial de caja / Gestionar productos / Ingresos y
+egresos) → cada uno atrás de su propio permiso, ya no los tres juntos.
+
+### Pantalla nueva `perfiles/listar.php`
+
+Gateada con `requerirPermiso('gestionar_perfiles')`. Un card por perfil
+(no la tabla inline de mesas/categorías — con 9 checkboxes por fila una
+tabla se hubiera visto muy apretada) con nombre, activo, y los 9 permisos
+como checkboxes, más un card "Nuevo perfil" arriba. **Protección contra
+auto-bloqueo** (mismo criterio que `usuarios/listar.php` de la ronda 16):
+si se está editando el perfil que es el propio del usuario logueado
+(`$_SESSION['perfil_id']`), no se puede desmarcar "Gestionar perfiles" —
+se bloquearía a sí mismo el acceso a esta misma pantalla, sin recuperación
+por mail ni otra puerta de entrada salvo tocar la base a mano. El
+checkbox queda `disabled` en esa fila (con un input oculto que manda `1`
+igual, porque un campo `disabled` no viaja en el POST) y el servidor
+vuelve a validar lo mismo — el `disabled` es solo para no invitar a
+clickear algo que va a fallar.
+
+### `usuarios/listar.php` (ronda 16) — el selector de "Rol" pasa a ser "Perfil"
+
+El `<select name="rol">` (Admin/Empleado) se reemplazó por
+`<select name="perfil_id">` con las opciones de `SELECT * FROM perfiles`
+(los inactivos se listan igual, marcados `(inactivo)`, mismo criterio que
+categorías/medios de pago inactivos). La protección de auto-bloqueo de la
+ronda 16 (que comparaba `rol !== 'admin'`) se reescribió: ahora resuelve
+`gestionar_usuarios` del perfil NUEVO que se está por guardar
+(`SELECT gestionar_usuarios FROM perfiles WHERE id = ?`) y bloquea si el
+usuario editado es uno mismo y ese perfil no lo tiene.
+
+### Validación — mismo problema de entorno que las rondas 13 a 16
+
+Sin PHP/MySQL/navegador en esta sesión, otra vez. Esta fue la ronda más
+grande de las cinco en tocar lógica de acceso (17 archivos entre ambos
+árboles: `database.sql`, `migracion_ronda17.sql` nuevo, `auth.php`,
+`header.php`, `dashboard.php`, `usuarios/listar.php` reescrito,
+`perfiles/listar.php` nuevo, y 12 archivos con el cambio mecánico de
+`requerirAdmin()` a `requerirPermiso()`), así que la revisión manual fue
+más exhaustiva que de costumbre: lectura completa de cada archivo,
+balance de `{`/`}`/`(`/`)` en los 17, `grep` de que no quedó ningún
+`esAdmin()`/`requerirAdmin()`/`usuario_rol` real (solo 2 menciones en
+comentarios), `diff` de contenido entre árboles ignorando la profundidad
+de `../` y CRLF/LF (`perfiles/listar.php` se creó en LF y se pasó a CRLF
+con `unix2dos`), y barrido de BOM/mojibake en los dos árboles completos
+más los `.sql`. **Nada de esto reemplaza levantar el sistema real.** Antes
+de subir esto a producción:
+
+- [ ] Correr `migracion_ronda17.sql` sobre una copia de la base real y
+      confirmar que los usuarios existentes quedan con el `perfil_id`
+      correcto según su `rol` viejo (un `SELECT u.usuario, u.rol, p.nombre
+      FROM usuarios u JOIN perfiles p ON p.id = u.perfil_id` tiene que dar
+      admin→Administrador, empleado→Empleado).
+- [ ] Loguearse con el usuario admin de siempre y confirmar que ve
+      exactamente lo mismo que veía antes de esta ronda (nada más y nada
+      menos) — es el caso que más fácil se rompe con un permiso mal
+      mapeado.
+- [ ] Crear un perfil de prueba bien restringido (por ejemplo, solo
+      `ver_caja` en 1 y el resto en 0), asignárselo a un usuario de
+      prueba, loguearse con ese usuario y confirmar: (a) el sidebar
+      muestra solo "Caja" del lado restringido, ni el grupo Reportes ni
+      Configuración aparecen; (b) entrando por URL directa a
+      `productos/listar.php` (sin pasar por el menú) redirige a
+      `dashboard.php` en vez de mostrar la pantalla — probar esto es más
+      importante que probar que el link no aparece, porque un permiso mal
+      puesto en el `requerirPermiso()` de la pantalla es el fallo real de
+      seguridad, no un link visible de más en el menú.
+- [ ] Con ese mismo usuario de prueba, confirmar que Salón/POS, Stock y
+      Egresos siguen andando normalmente (sin gate de permiso, como se
+      definió a propósito en esta ronda).
+- [ ] Editar el perfil propio (el que usa la cuenta con la que se está
+      logueado) desde `perfiles/listar.php` y confirmar que el checkbox
+      "Gestionar perfiles" aparece deshabilitado y que un POST directo
+      forzando que ese permiso quede en 0 igual lo rechaza el servidor.
+- [ ] Confirmar que `caja/cerrar.php`/`caja/abrir.php` (que NO se tocaron
+      esta ronda) siguen sin pedir ningún permiso especial, solo login —
+      el botón "Cerrar caja" del dashboard tiene que seguir viéndose para
+      cualquier usuario con la caja abierta, sin importar su perfil.
+
+## Ronda 18 — el reskin de la ronda 14 no alcanzaba: Salón reconstruido a mano igual que el mockup (SIN validar con ejecución real)
+
+El usuario mandó una captura del mockup (pantalla Salón) y dijo
+explícitamente que el sistema real tiene que quedar **igual**, no
+parecido. La ronda 14 había hecho un reskin a nivel de tokens globales
+(tipografía, radios, sombras) pero **nunca tocó el HTML/CSS específico de
+cada pantalla** — por eso `mesas/salon.php` seguía con el diseño viejo de
+tarjetas sólidas de color (fondo verde/rojo/ámbar pleno + texto blanco),
+completamente distinto del mockup (tarjeta clara con borde de color +
+badge de estado en píldora). Esta ronda corrige eso, pantalla por pantalla
+empezando por la que mandó el usuario, en vez de asumir que los tokens
+globales alcanzaban.
+
+### Salón (`mesas/salon.php` + CSS) — reconstruido para calcar el mockup
+
+- **Tarjeta de mesa**: antes `background-color` sólido por estado (`#1e7e34`/
+  `#c0392b`/`#d68910`) con texto blanco centrado. Ahora: fondo claro
+  (blanco para libre, tinte suave del color de marca/alerta para
+  ocupada/cuenta pedida), borde de 1.5px del color de estado, nombre de
+  la mesa en Fraunces a la izquierda + badge de estado en píldora a la
+  derecha (mismo layout que el mockup), línea de capacidad en gris, y
+  para mesas ocupadas una línea con el tiempo transcurrido **y el total
+  del pedido** (dato nuevo: la query de `mesas/salon.php` ahora trae
+  `total` de `pedidos`, antes no lo pedía — coincide con lo que mostraba
+  el mockup y es información real y útil, no solo estética).
+- **Botón "Para llevar"**: era `btn-dark` (gris/negro de Bootstrap, no
+  tenía nada que ver con la marca). Pasa a `btn-primary` (ya estilizado
+  con el bordó de marca desde antes) + ícono 🛍️.
+- **Leyenda de colores** al pie de la grilla (Libre/Ocupada/Cuenta
+  pedida con su punto de color), que no existía antes — está en el
+  mockup y ayuda a entender el código de color sin tener que aprenderlo.
+  **Corrección agregada en ronda 20**: esta leyenda calcó el texto del
+  mockup sin verificar que `estado = 'cuenta_pedida'` fuera alcanzable en
+  el sistema real — no lo era, quedó como un valor de ENUM muerto que
+  ningún código seteaba nunca (el paso real en ese momento era "Entregado",
+  vía "Enviar a cocina"/"Marcar entregado"). El usuario lo detectó
+  ("me agregaste el Cuenta pedida pero no puedo mandar a ese estado la
+  orden"). Ver "Ronda 20" para la corrección: ahora es un estado real.
+
+### Tokens de color nuevos en `style.css` (para el resto de las pantallas)
+
+La ronda 14 había sumado `--borde-suave`/`--texto-secundario`/`--sombra-tarjeta`
+pero **nunca los tokens semánticos con variante suave** que el mockup usa
+en todos lados (badges de estado, tarjetas de mesa, etc.) — ese fue el
+hueco real detrás de por qué "no se ajustaba todo el sistema al mockup".
+Se sumaron: `--exito`/`--exito-suave`, `--peligro`/`--peligro-suave`,
+`--alerta`/`--alerta-suave`, `--info`/`--info-suave`, y `--marca-suave`
+(tinte rosado del bordó de marca, para fondos "ocupado"). Mismos valores
+hexadecimales que usa el mockup.
+
+### Badges de estado en TODO el sistema, sin tocar HTML de cada pantalla
+
+En vez de reescribir cada pantalla con badges (caja/historial.php,
+egresos, usuarios, mesas/listar.php, productos/listar.php...) se agregó un
+override global en `style.css` de las clases de color planas de Bootstrap
+(`.badge.bg-success`, `.badge.bg-danger`, `.badge.bg-warning`,
+`.badge.bg-info`, `.badge.bg-secondary`) a la versión "suave" (fondo tenue
++ texto del color fuerte) — mismo aspecto que los badges del mockup en
+todos lados de una sola vez. **Única excepción a propósito**: el badge de
+"Stock bajo" del dashboard se dejó sólido/fuerte (clase nueva
+`.badge-alerta-fuerte` sumada a `dashboard.php`) porque busca llamar la
+atención con urgencia, no describir un estado tranquilo como "Ocupada" o
+"Exacto" — mismo criterio que ya usaba el mockup (ahí también el stock
+bajo era un badge sólido, distinto de los badges de estado en píldora
+suave).
+
+### Sidebar — ajustes de detalle (no la estructura de ítems, ver más abajo)
+
+- `--sidebar-width` de 226px a 250px, más cerca del ancho del mockup.
+- El ítem activo del menú perdió la barra blanca vertical
+  (`box-shadow: inset 3px 0 0 #fff`) que tenía desde la ronda 11 — el
+  mockup marca el activo solo con el fondo más claro, sin barra lateral.
+
+### Lo que NO se igualó a propósito, y por qué
+
+**La estructura de ítems del sidebar no se aplanó.** El mockup muestra
+6 ítems sueltos (Inicio, Salón, Egresos, Caja, Reportes, Productos) sin
+ningún grupo desplegable, porque el mockup era una demo simplificada con
+7 pantallas en total. El sistema real tiene 5 reportes y 7 ABMs de
+Configuración (12 pantallas reales solo ahí) — aplanar todo eso en una
+lista sin agrupar haría un menú larguísimo e inmanejable, muy distinto
+del mockup limpio. Se mantienen los grupos plegables "Reportes" y
+"Configuración" de la ronda 11 con el mismo criterio visual del resto
+(colores, radios, tipografía), pero la estructura de navegación no es
+1 a 1 con el mockup por una razón real de cantidad de contenido, no por
+falta de esfuerzo. Si esto no es lo que el usuario esperaba, vale la pena
+que lo diga explícitamente para revisar el criterio.
+
+**El resto de las pantallas (Inicio más allá de los badges, POS, Caja
+cerrar/abrir, los 5 Reportes con gráfico, Productos, Egresos) todavía no
+se reconstruyeron a mano contra su pantalla equivalente del mockup** —
+esta ronda se enfocó en Salón (la que mandó el usuario) más los cambios
+globales (tokens de color + badges) que ya mejoran la consistencia en
+todos lados. Falta el mismo trabajo puntual que se hizo acá para cada
+pantalla restante si el pedido es "igual" en el sentido más estricto.
+
+### Validación — mismo problema de entorno que las rondas 13 a 17
+
+Sin PHP/MySQL/navegador en esta sesión. Revisión manual de los 4 archivos
+tocados (`style.css`, `header.php`, `mesas/salon.php`, `dashboard.php`),
+balance de `{`/`}`/`(`/`)`, `diff` de contenido entre árboles ignorando
+`../` y CRLF/LF, barrido de BOM/mojibake. **No se pudo confirmar
+visualmente que Salón haya quedado igual al mockup** — antes de asumir que
+sí:
+
+- [ ] Abrir `mesas/salon.php` en un navegador real en desktop y comparar
+      lado a lado con el mockup (`https://claude.ai/artifact/74eaTDLruwNAcMCSBHFNWW`,
+      pantalla Salón).
+- [ ] Confirmar que el total del pedido se ve bien en la línea de tiempo
+      de una mesa ocupada real (con un pedido real cargado), no solo que
+      el código compila.
+- [ ] Revisar de cerca los badges de `caja/historial.php` (sobra/falta/
+      exacto) y `usuarios/listar.php` (Bloqueado) con el nuevo estilo
+      suave — son los que más cambian de aspecto con el override global.
+- [ ] Confirmar que el badge de "Stock bajo" del dashboard sigue viéndose
+      sólido/rojo fuerte (no se coló en el override suave).
+
+## Ronda 18b — bug real: `dashboard.php` daba 500 en producción por una ruta `require` rota
+
+El usuario reportó error 500 al abrir el dashboard y pidió específicamente
+revisar las rutas — diagnóstico correcto al toque.
+
+**Causa raíz**: al sincronizar `dashboard.php` a `DEPLOY_HOSTINGER` en la
+segunda mitad de la ronda 18 (el cambio del badge `badge-alerta-fuerte`),
+se hizo un `cp` directo desde `_dev_no_subir/public_html/dashboard.php`
+**sin reaplicar el ajuste de profundidad de `../`** que sí se había hecho
+correctamente en la ronda 17. `_dev_no_subir/public_html/dashboard.php`
+usa `require_once __DIR__ . '/../includes/auth.php'` (sube un nivel,
+porque `public_html/` está anidado un nivel por debajo de `includes/` en
+ese árbol), pero en `DEPLOY_HOSTINGER/` **`includes/` está al mismo nivel
+que `dashboard.php`**, no un nivel arriba — ahí la ruta correcta es
+`__DIR__ . '/includes/auth.php'`, sin `../`. El `cp` pisó la versión ya
+corregida con la versión sin corregir, y el `../` de más apuntaba a una
+carpeta `includes/` que no existe un nivel arriba de `DEPLOY_HOSTINGER/`
+en el servidor real → `require` fallaba con "failed to open stream" →
+fatal error de PHP → 500.
+
+**Por qué no se detectó en la revisión de esta sesión**: la verificación
+posterior al `cp` fue un `diff` **sin normalizar** la diferencia de
+profundidad esperada entre árboles (`diff _dev_no_subir/.../dashboard.php
+DEPLOY_HOSTINGER/dashboard.php`, en vez del patrón ya usado en rondas
+anteriores de `sed 's|\.\./includes/|includes/|g'` antes de comparar). Un
+`diff` plano entre los dos árboles para un archivo con esta particularidad
+**siempre va a decir "MATCH" tanto si los dos están bien (con su
+profundidad correcta cada uno) como si los dos quedaron mal por igual**
+(como pasó acá) — el `diff` sin normalizar no puede distinguir esos dos
+casos. Ronda 17 sí había usado el patrón normalizado correctamente para
+este mismo archivo; ronda 18 se saltó ese paso al hacer un `cp` de
+"último momento" para un cambio chico (una sola clase CSS) y no se
+tomó con el mismo cuidado que los cambios grandes.
+
+**Corrección**: se rehicieron los 3 `require`/`require_once` de
+`DEPLOY_HOSTINGER/dashboard.php` (`auth.php`, `functions.php`,
+`header.php`, `footer.php`) sacando el `../` de más. Además, se corrió
+una auditoría automática sobre **todo** `DEPLOY_HOSTINGER` (y también
+`_dev_no_subir`, por las dudas): un script que extrae cada
+`require(_once) __DIR__ . '/...'` de cada `.php`, resuelve la ruta final
+y confirma que el archivo de destino existe en disco. Salió limpio en los
+dos árboles salvo el único caso esperado
+(`includes/db.php -> ../config/config.php`, que no existe en el repo
+a propósito — tiene credenciales reales, está en `.gitignore`, lo crea
+cada instalación a partir de `config.example.php`). Esto confirma que
+`dashboard.php` era el único archivo con esta rotura, no había otros
+escondidos.
+
+**Lección para toda sesión futura que sincronice `DEPLOY_HOSTINGER` con
+`_dev_no_subir`**: para CUALQUIER archivo raíz de `public_html/`
+(`dashboard.php`, `login.php`, `logout.php`, `cambiar_password.php`,
+`index.php`) o de una subcarpeta, la verificación después de un `cp`
+**tiene que ser siempre con la ruta normalizada** (`sed` sacando/poniendo
+el `../` de más según corresponda, como ya documentaba MEMORY.md desde
+rondas anteriores para archivos de subcarpeta) — nunca un `diff` plano
+entre los dos árboles para estos archivos, ni siquiera "solo para un
+cambio chico". Si en algún momento sobra tiempo, valdría la pena escribir
+el `scripts/comparar_arboles.sh` que este archivo menciona como
+inexistente desde hace varias rondas, con esta misma auditoría de rutas
+`require` incluida — hubiera detectado este bug antes de que llegara a
+producción.
+
+## Ronda 19 — resto del sistema contra el mockup: POS reconstruido, badges cubiertos del todo (SIN validar con ejecución real)
+
+El usuario pidió seguir con el resto de las pantallas del mockup y
+preguntó si hacía falta que mande una imagen de cada una — no hace falta:
+el mockup lo armé yo mismo (los `.dc.html`), así que tengo los valores
+exactos de cada pantalla sin necesidad de mirar capturas.
+
+**Antes de tocar nada** se relevó qué pantallas tenían CSS propio sin
+cubrir por los overrides globales de las rondas 14/18 (el mismo problema
+que tenía Salón) vs. cuáles ya se arman enteramente con clases de
+Bootstrap (`.card`, `.table`, `.badge`, `.btn`, `.alert`, `.form-control`)
+que **ya** heredan el reskin global sin tocar nada más. Se hizo con un
+`grep` de todas las clases usadas en Caja, Reportes (los 5), Productos,
+Egresos y los ABMs (mesas/categorías/medios de pago/usuarios/perfiles):
+ninguna tiene CSS propio relevante sin cubrir — todas ya se ven alineadas
+al mockup solo por los cambios globales que ya existían. La única
+pantalla con una cantidad importante de CSS propio sin tocar todavía era
+el **POS** (`pedidos/nuevo.php`), reconstruido acá.
+
+### POS (`assets/css/style.css`, sin tocar el PHP/JS de la pantalla)
+
+- **`.producto-btn`** (tarjeta de producto en la grilla): borde de 2px
+  gris oscuro (`#d8cfc4`) sin sombra pasa a borde de 1.5px `--borde-suave`
+  + `box-shadow: var(--sombra-tarjeta)` (mismo lenguaje de tarjeta que el
+  resto del reskin). El precio, que antes arrancaba gris y recién se
+  ponía color de marca al tocar/pasar el mouse, ahora es **siempre**
+  bordó y negrita (`font-weight:700; color:var(--marca-principal)`) —
+  es el dato que un mozo apurado necesita leer más rápido, no tiene
+  sentido que empiece apagado.
+- **Chips de categoría** (`#tabsCategorias .nav-link`): antes TODOS los
+  chips (activos o no) tenían borde rojo de 2px, compitiendo entre sí por
+  atención. Ahora solo el chip **activo** lleva color de marca (relleno
+  bordó + texto blanco); los demás quedan neutros (borde/fondo suaves,
+  texto gris) — mismo criterio que el mockup, donde un solo chip resalta
+  y el resto son referencia de fondo.
+- **Cobertura de `.badge.bg-primary`** sumada al override global de
+  badges (se había cubierto success/danger/warning/info/secondary en la
+  ronda 18, pero el badge "Mesa" del encabezado del POS usa `bg-primary`
+  y se había quedado con el azul de Bootstrap sin tocar — ahora usa
+  `--marca-suave`/`--marca-principal-oscuro`, mismo criterio suave que el
+  resto).
+- `egresos/nuevo.php` reusa la clase `.producto-btn` para sus chips de
+  categoría/medio de pago (carga rápida de mozo) — se beneficia del mismo
+  cambio sin tocar ese archivo.
+
+### Lo que se decidió NO tocar (a propósito, mismo criterio que la ronda 18)
+
+El mockup mostraba el "Nuevo egreso" con selects simples de
+categoría/medio de pago; el sistema real usa una grilla de chips táctiles
+para carga rápida (pensada para un mozo apurado, no para un demo de
+escritorio) — se mantiene la grilla de chips, ya beneficiada por el
+cambio de `.producto-btn` de arriba, en vez de forzarla a selects simples
+solo por calcar el mockup literal.
+
+### Validación — mismo problema de entorno que las rondas 13 a 18
+
+Sin PHP/MySQL/navegador otra vez. Se aplicó la lección de la ronda 18b:
+`diff` **normalizado** (no plano) para verificar la sincronización entre
+árboles, y se corrió de nuevo la auditoría de rutas `require` sobre todo
+`DEPLOY_HOSTINGER` después de sincronizar (limpia, salvo el
+`config/config.php` esperado). Balance de `{`/`}` de `style.css`
+verificado (145/145), barrido de BOM/mojibake sin encontrar nada.
+**Nada de esto reemplaza abrir el POS real y tocarlo.** Antes de darlo por
+bueno:
+
+- [ ] Abrir el POS en un celular/tablet real (no solo desktop) y confirmar
+      que la sombra nueva de `.producto-btn` no hace que la grilla se vea
+      "pesada" o lenta al scrollear en un equipo de gama baja — es la
+      pantalla más usada del sistema, vale la pena el chequeo extra.
+      Si se siente pesada, la sombra se puede sacar solo para mobile con
+      un media query sin perder el resto del cambio.
+- [ ] Confirmar que los chips de categoría siguen siendo fáciles de leer
+      con el nuevo estilo neutro-por-defecto (el objetivo era que el
+      activo resalte más, no que los inactivos se vuelvan difíciles de
+      encontrar).
+- [ ] Repasar con el usuario si Caja/Reportes/Productos/Egresos, que no
+      se tocaron esta ronda por heredar ya el reskin global, efectivamente
+      se ven alineadas al mockup en la práctica — el relevamiento fue por
+      `grep` de clases CSS, no por comparación visual real.
+
+## Ronda 20 — "Cuenta pedida" pasa a ser el único paso intermedio real, se elimina "Enviar a cocina"/"Entregado" (SIN validar con ejecución real)
+
+### Contexto
+
+El usuario reportó que el botón/badge "Cuenta pedida" agregado en la ronda
+18 (copiado literal del texto del mockup) no llevaba a ningún lado: no
+había forma de mandar un pedido a ese estado. Diagnóstico con `grep -rn
+"cuenta_pedida"` en todo el árbol: el único uso real era la leyenda visual
+de `mesas/salon.php` y un valor de ENUM (`mesas.estado`) que ningún código
+seteaba — un estado muerto. El flujo real en ese momento era de **dos**
+pasos intermedios (`abierto` → `en_preparacion` vía "Enviar a cocina" →
+`entregado` vía "Marcar entregado" → `cerrado`), heredado de un diseño
+pensado para cocina, que el dueño de un almacén de campo + resto chico no
+usa así.
+
+Se preguntó explícitamente al usuario qué prefería (arreglar solo el texto
+de la leyenda vs. eliminar el flujo de dos pasos y hacer de "Cuenta
+pedida" el único paso real) — eligió la segunda opción: **"no necesito el
+estado entregado ni enviado a la cocina, cambialo a cuenta pedida"**.
+
+### Cambios
+
+- **`database.sql`**: `pedidos.estado` ENUM reducido de
+  `('abierto','en_preparacion','entregado','cerrado','cancelado')` a
+  `('abierto','cuenta_pedida','cerrado','cancelado')`. Columnas nuevas
+  `cuenta_pedida_en DATETIME NULL` / `cuenta_pedida_por_id INT UNSIGNED
+  NULL` (+ FK `fk_pedidos_cuenta_pedida_por`), mismo lugar donde estaban
+  `entregado_en`/`entregado_por_id`. Esas dos columnas viejas **no se
+  borraron** (mismo criterio que `usuarios.rol` en la ronda 17: quedan
+  como dato histórico inerte, comentario explícito en el schema) — evita
+  un `DROP COLUMN` innecesario en producción.
+- **`migracion_ronda20.sql`** (nuevo, para la base real de Hostinger):
+  agrega las 2 columnas nuevas (sin FK todavía), copia
+  `entregado_en`/`entregado_por_id` a las columnas nuevas para cualquier
+  pedido que ya esté en `'entregado'` (no se pierde el dato de cuándo se
+  entregó), convierte cualquier pedido en `('en_preparacion','entregado')`
+  a `'cuenta_pedida'`, angosta el ENUM con `ALTER TABLE ... MODIFY COLUMN`,
+  y recién al final agrega la FK (después de poblar todas las filas, para
+  no fallar contra filas ya existentes).
+- **`includes/functions.php`** — `renderBotonEstadoPedido()` reescrita:
+  antes tenía 3 ramas (abierto → "Enviar a cocina", en_preparacion →
+  "Marcar entregado", entregado → nada); ahora 2 (abierto → botón "🧾
+  Pedir la cuenta", cuenta_pedida → badge "🧾 Cuenta pedida").
+- **`pedidos/agregar_item.php`, `quitar_item.php`, `cancelar.php`,
+  `cerrar.php`**: el `WHERE estado IN ('abierto', 'en_preparacion',
+  'entregado')` de cada uno (qué pedidos se pueden seguir tocando) pasa a
+  `IN ('abierto', 'cuenta_pedida')`.
+- **`pedidos/nuevo.php`**: mismo cambio de `WHERE` (2 ocurrencias, por
+  `pedido_id` y por `mesa_id`). En el JS, `enviarCocina()` y
+  `marcarEntregado()` (dos funciones, dos `fetch()` a dos endpoints
+  distintos) se reemplazan por una sola `pedirCuenta()` que llama a
+  `pedir_cuenta.php`. `actualizarBotonEstadoPedido()` se simplifica: ya no
+  tiene rama para `en_preparacion`.
+- **`pedidos/pedir_cuenta.php`** (nuevo, reemplaza a los dos archivos de
+  abajo): mismo patrón que los demás endpoints AJAX (`requerirLogin()`,
+  chequeo de método POST, CSRF a mano porque responde JSON). Hace
+  `UPDATE pedidos SET estado = 'cuenta_pedida', cuenta_pedida_en = NOW(),
+  cuenta_pedida_por_id = ? WHERE id = ? AND estado = 'abierto'` — el
+  `WHERE estado = 'abierto'` en la misma query evita una carrera si dos
+  mozos tocan el botón casi a la vez (el segundo `UPDATE` afecta 0 filas,
+  se detecta con `rowCount() === 0` y devuelve error "recargá la
+  página").
+- **`pedidos/enviar_cocina.php`, `pedidos/marcar_entregado.php`**:
+  **eliminados** (ambos árboles) — ya no hay ningún camino que los llame.
+- **`mesas/salon.php`**: el `WHERE estado IN (...)` de la query de
+  pedidos abiertos, igual que arriba. La lógica de qué clase/texto pintar
+  por mesa pasa de comparar `'entregado'` a comparar `'cuenta_pedida'`
+  (`mesa-cuenta_pedida` / "Cuenta pedida" en vez de `mesa-ocupada` /
+  "Ocupada" cuando corresponde) — la leyenda que ya existía desde la
+  ronda 18 (ver corrección agregada ahí arriba) queda **correcta** por
+  primera vez.
+- **`reportes/auditoria_pedidos.php`**: todo el archivo (WHERE, JOIN,
+  columnas del `SELECT`, export CSV, encabezados de tabla HTML, celdas)
+  renombra `entregado_por_id`/`entregado_en`/`entregado_por_nombre` a
+  `cuenta_pedida_por_id`/`cuenta_pedida_en`/`cuenta_pedida_por_nombre`
+  ("Entregado por"/"Fecha entrega" → "Cuenta pedida por"/"Fecha cuenta
+  pedida").
+
+### Sincronización entre árboles
+
+Los 9 archivos tocados (`functions.php`, los 4 `pedidos/*.php` de un
+`WHERE` de una línea, `nuevo.php`, `pedir_cuenta.php` nuevo,
+`salon.php`, `auditoria_pedidos.php`) se copiaron/editaron en
+`DEPLOY_HOSTINGER` con el ajuste de profundidad de `require` (`../../`
+→ `../` para los archivos de subcarpeta) y se verificaron con `diff`
+**normalizado** (`sed` ajustando la profundidad + `tr -d '\r'` de ambos
+lados antes de comparar), no un `diff` plano — lección de la ronda 18b
+aplicada desde el principio esta vez.
+
+**Se repitió el bug de `sed` documentado en la ronda 13** ("`sed` en Git
+Bash de Windows convierte CRLF a LF en silencio", ver "Errores ya
+cometidos" más abajo): el `sed -i 's|\.\./\.\./includes/|../includes/|g'`
+usado para ajustar la profundidad de `require` en `mesas/salon.php`,
+`pedidos/nuevo.php` y `reportes/auditoria_pedidos.php` dentro de
+`DEPLOY_HOSTINGER` dejó esos 3 archivos en LF-only, mientras el resto del
+árbol sigue en CRLF. Se detectó con `grep -qU $'\r'` sobre cada archivo
+(mismo chequeo que ronda 13) y se corrigió con `unix2dos -q` sobre los 3
+— re-verificado que el contenido normalizado seguía siendo idéntico
+después del fix. El archivo nuevo `pedir_cuenta.php` (creado con `Write`,
+por lo tanto LF-only desde el vamos, sin pasar por `sed`) se normalizó a
+CRLF de la misma forma en ambos árboles. Ya son dos rondas (13 y 20) donde
+este mismo mecanismo de `sed -i` con reemplazo de ruta se olvida de
+preservar CRLF — vale la pena que una sesión futura escriba un wrapper
+chico (`sed ... | unix2dos` en una sola línea, o directamente evitar
+`sed -i` para estos ajustes y usar la herramienta `Edit` cuando el
+entorno lo permita) en vez de acordarse cada vez de memoria.
+
+### Validación — mismo problema de entorno que las rondas 13 a 19
+
+Sin PHP/MySQL/navegador en esta sesión (ver "Regla de trabajo activa" al
+final del archivo — no se pudo cumplir el estándar real esta ronda
+tampoco). Revisión manual de los 9 archivos: lectura completa, balance de
+`{`/`}`/`(`/`)` por archivo (todos calzaron — ver detalle en el historial
+de comandos si hace falta el desglose exacto), barrido de BOM (`head -c3`)
+y mojibake (`grep -c $'\xc3\x83'`) sin encontrar nada en ninguno de los 9.
+`grep` de `enviar_cocina`/`marcar_entregado` en todo el árbol confirma que
+no queda ninguna referencia viva (solo un comentario explicativo en
+`functions.php` que menciona el nombre viejo a propósito, para contexto).
+Auditoría de rutas `require` (script bash propio, resolviendo cada
+`require __DIR__ . '/...'` con `realpath -m` y confirmando que el destino
+existe) corrida sobre `DEPLOY_HOSTINGER` y `_dev_no_subir` completos: sin
+roturas, salvo el único falso positivo ya conocido de
+`includes/db.php -> ../config/config.php` (gitignoreado a propósito).
+
+**Nada de esto reemplaza correr el flujo real.** Antes de subir esto a
+producción:
+
+- [ ] Correr `migracion_ronda20.sql` contra una copia de la base real (o
+      una importación fresca de `database.sql` + datos de prueba) y
+      confirmar que no falla, y que pedidos viejos en `'entregado'`
+      terminan en `'cuenta_pedida'` con `cuenta_pedida_en`/
+      `cuenta_pedida_por_id` poblados desde los valores viejos.
+- [ ] Abrir un pedido de mesa, tocar "🧾 Pedir la cuenta", confirmar que
+      el botón cambia a badge y que la mesa en `mesas/salon.php` pinta
+      como "Cuenta pedida" (ámbar) en vez de "Ocupada".
+- [ ] Confirmar que se puede seguir agregando/quitando ítems con el
+      pedido en `cuenta_pedida` (el `WHERE` lo permite a propósito, por
+      si el mozo agrega algo de último momento) y que se puede cobrar
+      directo desde `abierto` sin pasar por `cuenta_pedida` (es un paso
+      opcional, no obligatorio).
+- [ ] Tocar "Pedir la cuenta" dos veces rápido (o simular la carrera) y
+      confirmar que la segunda no rompe nada (el `WHERE estado =
+      'abierto'` del UPDATE debería hacer que la segunda devuelva el
+      error "recargá la página" en vez de un 500 o un estado raro).
+- [ ] Revisar `reportes/auditoria_pedidos.php` con un pedido real que
+      pasó por `cuenta_pedida` antes de cobrarse: confirmar que la
+      columna/CSV "Cuenta pedida por"/"Fecha cuenta pedida" muestra el
+      dato correcto.
+- [ ] `php -l` real sobre los 9 archivos en ambos árboles (esta sesión
+      solo pudo contar llaves/paréntesis a mano, no reemplaza el linter
+      real).
+
 ## Errores ya cometidos y su lección
 
 - **Trabajo previo reportado que no estaba en el repo.** Al retomar este
@@ -658,6 +1848,30 @@ alcanza porque `:focus-visible` lo filtra a propósito.
   árbol, no solo comparar que el texto de ambos lados "se vea igual" en la
   salida de una herramienta que podría estar normalizando ella misma el
   encoding al mostrarlo.
+- **`sed` en Git Bash de Windows convierte CRLF a LF en silencio (ronda 13).**
+  Sin PHP disponible para copiar/editar archivos con las herramientas
+  `Read`/`Edit` de siempre (ver "Ronda 13" arriba), se usó `sed -i 's|\.\./\.\./includes/|../includes/|g'`
+  para ajustar la profundidad de los `require` al copiar 19 archivos de
+  `_dev_no_subir/public_html` a `DEPLOY_HOSTINGER`. El contenido de texto
+  (acentos/ñ) quedó bien — no es el mismo bug que el de `Get-Content` de
+  arriba — pero `sed` (tanto en `-i` como en redirección a un archivo
+  nuevo) silenciosamente eliminó los `\r` de las líneas, dejando esos 19
+  archivos en LF mientras el resto del árbol (y los archivos originales)
+  seguían en CRLF. `file archivo.php` lo mostró claro: "with CRLF line
+  terminators" vs. sin esa frase. No rompe nada funcionalmente (PHP no
+  distingue CRLF de LF), pero rompe la consistencia del árbol y hace que
+  `diff` normal marque TODAS las líneas como distintas aunque el contenido
+  sea idéntico (falso positivo que casi se interpreta como una
+  sincronización rota). Se detectó comparando con `diff <(tr -d '\r' < A) <(tr -d '\r' < B)`
+  y se corrigió con `unix2dos -q archivo.php` (disponible en este Git Bash)
+  sobre los 19 archivos. Lección: si hay que tocar archivos de texto con
+  `sed`/sustituciones de shell en vez de `Read`/`Edit`, verificar
+  `file archivo` (o `cat -A | head`) antes y después en ambos lados de la
+  copia — no asumir que un cambio "solo de texto ASCII" preserva el resto
+  del archivo byte a byte. Si `php.exe`/`mysql.exe` no están disponibles en
+  una sesión, avisar al usuario explícitamente ANTES de improvisar con
+  herramientas de shell que no se usaron en rondas anteriores, en vez de
+  descubrir sus efectos secundarios sobre la marcha.
 
 ## Regla de trabajo activa
 

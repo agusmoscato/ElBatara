@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/functions.php';
 requerirLogin();
 header('Content-Type: application/json; charset=utf-8');
 
@@ -24,16 +24,15 @@ if (!$pedidoId) {
     exit;
 }
 
-// Se puede marcar como entregado desde "abierto" o "en_preparacion"
-// (por si el mozo sirve el pedido sin haber tocado "Enviar a cocina",
-// por ejemplo un pedido de solo bebidas).
-$stmt = $pdo->prepare("UPDATE pedidos SET estado = 'entregado', entregado_en = NOW(), entregado_por_id = ?
-                        WHERE id = ? AND estado IN ('abierto', 'en_preparacion')");
+// Ronda 20: reemplaza el paso de "Enviar a cocina"/"Marcar entregado" (dos
+// pasos, el dueño no los usa) por un único paso "Pedir la cuenta".
+$stmt = $pdo->prepare("UPDATE pedidos SET estado = 'cuenta_pedida', cuenta_pedida_en = NOW(), cuenta_pedida_por_id = ?
+                        WHERE id = ? AND estado = 'abierto'");
 $stmt->execute([$_SESSION['usuario_id'], $pedidoId]);
 
 if ($stmt->rowCount() === 0) {
-    echo json_encode(['error' => 'El pedido ya no está pendiente de entrega. Recargá la página.']);
+    echo json_encode(['error' => 'El pedido ya no está abierto. Recargá la página.']);
     exit;
 }
 
-echo json_encode(['ok' => true, 'estado' => 'entregado']);
+echo json_encode(['ok' => true, 'estado' => 'cuenta_pedida']);

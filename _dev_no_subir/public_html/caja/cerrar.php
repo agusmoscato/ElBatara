@@ -15,7 +15,7 @@ if (!$caja) {
 // Se arma la lista a partir de TODOS los medios de pago activos (LEFT JOIN),
 // así un medio sin ventas/egresos igual aparece en $0 en vez de desaparecer
 // de la conciliación.
-$stmt = $pdo->prepare("SELECT mp.id, mp.nombre, COALESCE(v.total_ventas, 0) AS total_ventas
+$stmt = $pdo->prepare("SELECT mp.id, mp.nombre, mp.es_efectivo, COALESCE(v.total_ventas, 0) AS total_ventas
                         FROM medios_pago mp
                         LEFT JOIN (
                             SELECT medio_pago_id, SUM(total) AS total_ventas
@@ -78,9 +78,11 @@ foreach ($ventasPorMedio as $fila) {
     $totalVendido += $ventas;
     $totalEgresos += $egresos;
 
-    // El efectivo esperado en caja solo se ve afectado por el medio
-    // "Efectivo" (el resto de los medios no mueve el cajón físico).
-    if (mb_strtolower($fila['nombre']) === 'efectivo') {
+    // El efectivo esperado en caja solo se ve afectado por el medio marcado
+    // como es_efectivo (ronda 13: antes se comparaba por el texto del
+    // nombre "Efectivo", que se rompía si alguien lo renombraba desde el
+    // ABM de Medios de pago).
+    if ($fila['es_efectivo']) {
         $totalEfectivoVentas = $ventas;
         $totalEfectivoEgresos = $egresos;
     }
@@ -192,11 +194,12 @@ require __DIR__ . '/../../includes/header.php';
     <div class="card">
       <div class="card-body">
         <h5 class="card-title">Contar caja</h5>
-        <form method="post" action="cerrar.php">
+        <form method="post" action="cerrar.php" id="formCerrarCaja">
           <input type="hidden" name="csrf_token" value="<?= h(generarTokenCsrf()) ?>">
           <div class="mb-3">
             <label class="form-label">Monto final contado (efectivo)</label>
-            <input type="number" step="0.01" min="0" name="monto_final_declarado" class="form-control" required autofocus>
+            <input type="number" step="0.01" min="0" name="monto_final_declarado" id="montoFinalDeclarado" class="form-control" required autofocus>
+            <div id="previewDiferencia" class="mt-2"></div>
           </div>
           <div class="mb-3">
             <label class="form-label">Nota / observación (opcional)</label>
@@ -204,6 +207,51 @@ require __DIR__ . '/../../includes/header.php';
           </div>
           <button type="submit" class="btn btn-danger btn-lg-touch w-100">Cerrar caja</button>
         </form>
+        <script>
+        (function () {
+          var EFECTIVO_ESPERADO = <?= json_encode($efectivoEsperado) ?>;
+          var input = document.getElementById('montoFinalDeclarado');
+          var preview = document.getElementById('previewDiferencia');
+          var form = document.getElementById('formCerrarCaja');
+
+          function formatearMoneda(n) {
+            return '$ ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          }
+
+          function calcularDiferencia() {
+            var valor = parseFloat(input.value);
+            if (isNaN(valor)) {
+              preview.innerHTML = '';
+              return null;
+            }
+            var diferencia = Math.round((valor - EFECTIVO_ESPERADO) * 100) / 100;
+            var html;
+            if (Math.abs(diferencia) < 0.005) {
+              html = '<span class="badge bg-secondary">Exacto</span>';
+            } else if (diferencia > 0) {
+              html = '<span class="badge bg-success">+' + formatearMoneda(diferencia) + ' sobra</span>';
+            } else {
+              html = '<span class="badge bg-danger">−' + formatearMoneda(Math.abs(diferencia)) + ' falta</span>';
+            }
+            preview.innerHTML = html;
+            return diferencia;
+          }
+
+          input.addEventListener('input', calcularDiferencia);
+
+          form.addEventListener('submit', function (e) {
+            var diferencia = calcularDiferencia();
+            var mensaje = diferencia === null
+              ? '¿Seguro que querés cerrar la caja?'
+              : '¿Seguro que querés cerrar la caja? Diferencia: ' +
+                (Math.abs(diferencia) < 0.005 ? 'exacto' : formatearMoneda(diferencia)) +
+                '. Esta acción no se puede deshacer.';
+            if (!confirm(mensaje)) {
+              e.preventDefault();
+            }
+          });
+        })();
+        </script>
       </div>
     </div>
   </div>

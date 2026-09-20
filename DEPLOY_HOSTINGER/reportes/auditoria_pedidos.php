@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/paginacion.php';
-requerirAdmin();
+requerirPermiso('ver_reportes');
 
 $pdo = obtenerConexion();
 
@@ -20,7 +20,7 @@ if ($estadoFiltro) {
     $params = [$estadoFiltro, $desde, $hasta];
 }
 if ($usuarioId) {
-    $where[] = '(p.usuario_id = ? OR p.entregado_por_id = ? OR p.cerrado_por_id = ? OR p.cancelado_por_id = ?)';
+    $where[] = '(p.usuario_id = ? OR p.cuenta_pedida_por_id = ? OR p.cerrado_por_id = ? OR p.cancelado_por_id = ?)';
     array_push($params, $usuarioId, $usuarioId, $usuarioId, $usuarioId);
 }
 if ($canal !== '') {
@@ -36,17 +36,18 @@ $totalFilas = (int)$stmt->fetchColumn();
 $pagina = obtenerPaginaActual();
 $offset = calcularOffset($pagina);
 $sqlListado = "SELECT p.id, p.estado, p.total, p.canal, mp.nombre AS medio_pago_nombre, p.creado_en,
-                               p.entregado_en, p.cerrado_en, p.cancelado_en,
+                               p.cuenta_pedida_en, p.cerrado_en, p.cancelado_en,
                                m.nombre AS mesa_nombre,
                                u.nombre AS mozo_nombre,
-                               ue.nombre AS entregado_por_nombre,
+                               ue.nombre AS cuenta_pedida_por_nombre,
                                uc.nombre AS cerrado_por_nombre,
-                               ua.nombre AS cancelado_por_nombre
+                               ua.nombre AS cancelado_por_nombre,
+                               p.motivo_cancelacion
                         FROM pedidos p
                         LEFT JOIN mesas m ON m.id = p.mesa_id
                         LEFT JOIN medios_pago mp ON mp.id = p.medio_pago_id
                         JOIN usuarios u ON u.id = p.usuario_id
-                        LEFT JOIN usuarios ue ON ue.id = p.entregado_por_id
+                        LEFT JOIN usuarios ue ON ue.id = p.cuenta_pedida_por_id
                         LEFT JOIN usuarios uc ON uc.id = p.cerrado_por_id
                         LEFT JOIN usuarios ua ON ua.id = p.cancelado_por_id
                         WHERE $whereSql
@@ -70,15 +71,16 @@ if (($_GET['exportar'] ?? '') === 'csv') {
         number_format((float)$p['total'], 2, ',', ''),
         $p['medio_pago_nombre'] ?? '-',
         $p['estado'] === 'cerrado' ? 'Cobrado' : 'Cancelado',
-        $p['entregado_por_nombre'] ?? '-',
-        $p['entregado_en'] ? date('d/m/Y H:i', strtotime($p['entregado_en'])) : '-',
+        $p['cuenta_pedida_por_nombre'] ?? '-',
+        $p['cuenta_pedida_en'] ? date('d/m/Y H:i', strtotime($p['cuenta_pedida_en'])) : '-',
         $p['cerrado_por_nombre'] ?? '-',
         $p['cerrado_en'] ? date('d/m/Y H:i', strtotime($p['cerrado_en'])) : '-',
         $p['cancelado_por_nombre'] ?? '-',
         $p['cancelado_en'] ? date('d/m/Y H:i', strtotime($p['cancelado_en'])) : '-',
+        $p['motivo_cancelacion'] ?? '-',
     ], $pedidosExport);
     exportarCsv('auditoria_pedidos_' . $desde . '_a_' . $hasta . '.csv',
-        ['#', 'Mesa', 'Canal', 'Mozo', 'Total', 'Medio de pago', 'Estado', 'Entregado por', 'Fecha entrega', 'Cobrado por', 'Fecha cobro', 'Cancelado por', 'Fecha cancelación'],
+        ['#', 'Mesa', 'Canal', 'Mozo', 'Total', 'Medio de pago', 'Estado', 'Cuenta pedida por', 'Fecha cuenta pedida', 'Cobrado por', 'Fecha cobro', 'Cancelado por', 'Fecha cancelación', 'Motivo cancelación'],
         $filasCsv);
 }
 
@@ -138,14 +140,14 @@ require __DIR__ . '/../includes/header.php';
   <thead>
     <tr>
       <th>#</th><th>Mesa</th><th>Canal</th><th>Mozo</th><th>Total</th><th>Medio de pago</th><th>Estado</th>
-      <th>Entregado por</th><th>Fecha entrega</th>
+      <th>Cuenta pedida por</th><th>Fecha cuenta pedida</th>
       <th>Cobrado por</th><th>Fecha cobro</th>
-      <th>Cancelado por</th><th>Fecha cancelación</th>
+      <th>Cancelado por</th><th>Fecha cancelación</th><th>Motivo cancelación</th>
     </tr>
   </thead>
   <tbody>
     <?php if (empty($pedidos)): ?>
-      <tr><td colspan="13" class="text-muted">Sin pedidos que coincidan con el filtro.</td></tr>
+      <tr><td colspan="14" class="text-muted">Sin pedidos que coincidan con el filtro.</td></tr>
     <?php endif; ?>
     <?php foreach ($pedidos as $p): ?>
     <tr>
@@ -160,12 +162,13 @@ require __DIR__ . '/../includes/header.php';
           <?= $p['estado'] === 'cerrado' ? 'Cobrado' : 'Cancelado' ?>
         </span>
       </td>
-      <td><?= $p['entregado_por_nombre'] ? h($p['entregado_por_nombre']) : '-' ?></td>
-      <td><?= $p['entregado_en'] ? h(date('d/m/Y H:i', strtotime($p['entregado_en']))) : '-' ?></td>
+      <td><?= $p['cuenta_pedida_por_nombre'] ? h($p['cuenta_pedida_por_nombre']) : '-' ?></td>
+      <td><?= $p['cuenta_pedida_en'] ? h(date('d/m/Y H:i', strtotime($p['cuenta_pedida_en']))) : '-' ?></td>
       <td><?= $p['cerrado_por_nombre'] ? h($p['cerrado_por_nombre']) : '-' ?></td>
       <td><?= $p['cerrado_en'] ? h(date('d/m/Y H:i', strtotime($p['cerrado_en']))) : '-' ?></td>
       <td><?= $p['cancelado_por_nombre'] ? h($p['cancelado_por_nombre']) : '-' ?></td>
       <td><?= $p['cancelado_en'] ? h(date('d/m/Y H:i', strtotime($p['cancelado_en']))) : '-' ?></td>
+      <td><?= $p['motivo_cancelacion'] ? h($p['motivo_cancelacion']) : '-' ?></td>
     </tr>
     <?php endforeach; ?>
   </tbody>

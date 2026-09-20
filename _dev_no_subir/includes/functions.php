@@ -88,8 +88,31 @@ function validarTokenCsrf(): void
     $token = $_POST['csrf_token'] ?? '';
     if (empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
         http_response_code(403);
-        die('Token de seguridad inválido. Recargá la página e intentá de nuevo.');
+        mostrarErrorCsrf();
+        exit;
     }
+}
+
+/**
+ * Página mínima para cuando el token CSRF vence (sesión vieja, doble
+ * pestaña, formulario abierto mucho tiempo). Antes era un die() en texto
+ * plano sin salida (ronda 13): dejaba a la persona en una pantalla en
+ * blanco sin ningún link de regreso. Reutiliza header.php/footer.php para
+ * que se vea como el resto del sistema (sidebar si sigue logueada, paleta
+ * de marca) en vez de un error crudo del navegador.
+ */
+function mostrarErrorCsrf(): void
+{
+    $tituloPagina = 'Sesión vencida';
+    require __DIR__ . '/header.php';
+    ?>
+    <div class="alert alert-danger">
+      <h4 class="alert-heading">Tu sesión para este formulario venció</h4>
+      <p>Puede pasar si dejaste la página abierta mucho tiempo o la abriste en otra pestaña. No se guardó nada por seguridad.</p>
+      <a href="<?= $base ?>dashboard.php" class="btn btn-danger">Volver al inicio</a>
+    </div>
+    <?php
+    require __DIR__ . '/footer.php';
 }
 
 /**
@@ -129,6 +152,39 @@ function mostrarFlashError(): void
 }
 
 /**
+ * Igual que flashError() pero para confirmaciones de éxito (ej: "Guardado
+ * correctamente.") en endpoints que no renderizan HTML propio y solo
+ * redirigen, como los ABMs simples (mesas, categorías, medios de pago).
+ */
+function flashExito(string $mensaje): void
+{
+    $_SESSION['flash_exito'] = $mensaje;
+}
+
+/**
+ * Imprime (y limpia) el mensaje de éxito guardado con flashExito(), si hay
+ * alguno pendiente. Se llama junto a mostrarFlashError() desde header.php.
+ */
+function mostrarFlashExito(): void
+{
+    if (empty($_SESSION['flash_exito'])) {
+        return;
+    }
+    echo '<div class="alert alert-success">' . h($_SESSION['flash_exito']) . '</div>';
+    unset($_SESSION['flash_exito']);
+}
+
+/**
+ * Indica si hay una caja de turno abierta en este momento. Se usa antes de
+ * permitir crear un pedido nuevo o cobrarlo, para que ninguna venta quede
+ * "fantasma" fuera de la conciliación de un cierre de caja.
+ */
+function hayCajaAbierta(PDO $pdo): bool
+{
+    return (bool)$pdo->query("SELECT id FROM caja_sesiones WHERE estado = 'abierta' ORDER BY id DESC LIMIT 1")->fetchColumn();
+}
+
+/**
  * Formatea el tiempo transcurrido desde una fecha/hora hasta ahora,
  * en un formato corto ("5 min", "1h 20min"). Se usa para mostrar hace
  * cuánto está abierta una mesa ocupada.
@@ -162,12 +218,27 @@ function exportarCsv(string $nombreArchivo, array $encabezados, array $filas): v
     echo "\xEF\xBB\xBF";
 
     $salida = fopen('php://output', 'w');
-    fputcsv($salida, $encabezados, ';');
+    fputcsv($salida, array_map('sanitizarCampoCsv', $encabezados), ';');
     foreach ($filas as $fila) {
-        fputcsv($salida, $fila, ';');
+        fputcsv($salida, array_map('sanitizarCampoCsv', $fila), ';');
     }
     fclose($salida);
     exit;
+}
+
+/**
+ * Antepone un apóstrofo a los campos que empiezan con =, +, -, @, tab o CR
+ * antes de escribirlos en un CSV. Sin esto, Excel/Sheets puede interpretar
+ * texto libre cargado por un usuario (ej. la descripción de un egreso) como
+ * una fórmula al abrir el archivo ("CSV formula injection").
+ */
+function sanitizarCampoCsv($valor)
+{
+    $texto = (string)$valor;
+    if ($texto !== '' && in_array($texto[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+        return "'" . $texto;
+    }
+    return $valor;
 }
 
 /**
@@ -185,22 +256,20 @@ function intPositivoONull($valor): ?int
 
 /**
  * Devuelve el HTML del botón de acción según el estado del pedido
- * (abierto -> "Enviar a cocina", en_preparacion -> "tocar al entregar",
- * entregado -> badge). Se usa tanto en el render inicial de
- * pedidos/nuevo.php como, con el mismo formato replicado en JS, para
- * actualizar la pantalla sin recargar toda la página al cambiar de
- * estado (ver actualizarBotonEstadoPedido() en nuevo.php).
+ * (abierto -> "Pedir la cuenta", cuenta_pedida -> badge). Se usa tanto en
+ * el render inicial de pedidos/nuevo.php como, con el mismo formato
+ * replicado en JS, para actualizar la pantalla sin recargar toda la
+ * página al cambiar de estado (ver actualizarBotonEstadoPedido() en
+ * nuevo.php). Ronda 20: antes tenía un paso intermedio de cocina
+ * (en_preparacion) que el dueño no usa — se sacó, queda un solo paso.
  */
 function renderBotonEstadoPedido(string $estado): string
 {
     if ($estado === 'abierto') {
-        return '<button class="btn btn-info btn-lg-touch" onclick="enviarCocina()">Enviar a cocina</button>';
+        return '<button class="btn btn-info btn-lg-touch" onclick="pedirCuenta()">🧾 Pedir la cuenta</button>';
     }
-    if ($estado === 'en_preparacion') {
-        return '<button class="btn btn-info btn-lg-touch" onclick="marcarEntregado()" title="Tocar cuando se lleve el pedido a la mesa">En preparación (tocar al entregar)</button>';
-    }
-    if ($estado === 'entregado') {
-        return '<span class="badge bg-success align-self-center fs-6">✓ Entregado</span>';
+    if ($estado === 'cuenta_pedida') {
+        return '<span class="badge bg-warning align-self-center fs-6">🧾 Cuenta pedida</span>';
     }
     return '';
 }
@@ -222,7 +291,7 @@ function recalcularTotalPedido(PDO $pdo, int $pedidoId): void
  */
 function obtenerEstadoPedido(PDO $pdo, int $pedidoId): array
 {
-    $stmt = $pdo->prepare("SELECT pi.id, pi.cantidad, pi.subtotal, p.nombre AS producto_nombre, p.tipo_venta
+    $stmt = $pdo->prepare("SELECT pi.id, pi.producto_id, pi.cantidad, pi.subtotal, p.nombre AS producto_nombre, p.tipo_venta
                             FROM pedido_items pi
                             JOIN productos p ON p.id = pi.producto_id
                             WHERE pi.pedido_id = ?
@@ -236,7 +305,10 @@ function obtenerEstadoPedido(PDO $pdo, int $pedidoId): array
         $total += (float)$it['subtotal'];
         $itemsSalida[] = [
             'id' => (int)$it['id'],
+            'producto_id' => (int)$it['producto_id'],
             'producto_nombre' => $it['producto_nombre'],
+            'tipo_venta' => $it['tipo_venta'],
+            'cantidad' => (float)$it['cantidad'],
             'cantidad_texto' => formatearCantidad((float)$it['cantidad'], $it['tipo_venta']),
             'subtotal_texto' => formatearMoneda((float)$it['subtotal']),
         ];

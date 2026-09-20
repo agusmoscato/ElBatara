@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
-requerirAdmin();
+requerirPermiso('gestionar_mesas');
 
 $pdo = obtenerConexion();
 
@@ -13,13 +13,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'guard
     $capacidad = filter_var($_POST['capacidad'] ?? 0, FILTER_VALIDATE_INT);
     $activo = isset($_POST['activo']) ? 1 : 0;
 
-    if ($nombre !== '' && $capacidad !== false) {
-        if ($id) {
-            $stmt = $pdo->prepare('UPDATE mesas SET nombre = ?, capacidad = ?, activo = ? WHERE id = ?');
-            $stmt->execute([$nombre, $capacidad, $activo, $id]);
-        } else {
-            $stmt = $pdo->prepare('INSERT INTO mesas (nombre, capacidad, activo) VALUES (?, ?, ?)');
-            $stmt->execute([$nombre, $capacidad, $activo]);
+    if ($nombre === '') {
+        flashError('El nombre no puede estar vacío.');
+    } elseif ($capacidad === false || $capacidad < 0) {
+        flashError('La capacidad tiene que ser un número mayor o igual a cero.');
+    } else {
+        try {
+            if ($id) {
+                $stmt = $pdo->prepare('UPDATE mesas SET nombre = ?, capacidad = ?, activo = ? WHERE id = ?');
+                $stmt->execute([$nombre, $capacidad, $activo, $id]);
+            } else {
+                $stmt = $pdo->prepare('INSERT INTO mesas (nombre, capacidad, activo) VALUES (?, ?, ?)');
+                $stmt->execute([$nombre, $capacidad, $activo]);
+            }
+            flashExito('Guardado correctamente.');
+        } catch (PDOException $e) {
+            flashError('No se pudo guardar. Revisá los datos e intentá de nuevo.');
         }
     }
     redirigir('mesas/listar.php');

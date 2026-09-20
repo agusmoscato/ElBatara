@@ -46,13 +46,12 @@ body {
      (para que deje de comportarse como overlay); de ahí que el ancho fijo
      y el `position:fixed` de acá abajo necesiten `!important` + selector
      con ID para poder ganarle a esa regla nativa.
-   - `--sidebar-width` variable y colapsable a solo íconos
-     (`--sidebar-width-collapsed`) con el botón «: pensado sobre todo para
-     tablet, donde el POS necesita el máximo ancho posible para la grilla
-     de productos y el panel de pedido. */
+   - `--sidebar-width` fijo, siempre visible completo desde 768px (ronda 15:
+     se sacó el botón de colapsar a solo íconos de la ronda 11 — no
+     funcionaba bien y el pedido fue directamente que no se pudiera
+     esconder el sidebar en desktop/tablet, punto). */
 :root {
-    --sidebar-width: 226px;
-    --sidebar-width-collapsed: 64px;
+    --sidebar-width: 250px;
 }
 
 .app-sidebar {
@@ -85,38 +84,6 @@ body {
     text-overflow: ellipsis;
 }
 
-.sidebar-collapse-btn {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    color: #fff;
-    border-radius: 6px;
-    width: 28px;
-    height: 28px;
-    line-height: 1;
-    flex: 0 0 auto;
-}
-
-.sidebar-collapse-btn:hover {
-    background-color: rgba(255, 255, 255, 0.15);
-}
-
-/* Sin este reset, el contorno de foco por defecto del navegador (un
-   recuadro grueso, normalmente negro) se dibuja hacia AFUERA del botón y,
-   como el botón queda pegado al borde derecho del sidebar (sobre todo
-   colapsado, con solo 64px de ancho), ese recuadro se sale visualmente
-   hacia el contenido principal — bug real reportado con captura de
-   pantalla real en la ronda 12. `outline-offset` negativo lo mantiene dentro
-   de los límites del botón. */
-.sidebar-collapse-btn:focus-visible {
-    outline: 2px solid rgba(255, 255, 255, 0.85);
-    outline-offset: -3px;
-}
-
-.sidebar-toggle-icon {
-    display: inline-block;
-    transition: transform 0.15s ease;
-}
-
 .sidebar-nav {
     padding: 8px;
 }
@@ -147,9 +114,8 @@ body {
 
 .sidebar-nav .nav-link.active {
     color: #fff;
-    background-color: rgba(255, 255, 255, 0.22);
+    background-color: rgba(255, 255, 255, 0.18);
     font-weight: 600;
-    box-shadow: inset 3px 0 0 #fff;
 }
 
 .sidebar-icon {
@@ -289,10 +255,6 @@ body {
         background-color: var(--marca-principal) !important;
     }
 
-    body.sidebar-collapsed #sidebar.offcanvas-md {
-        width: var(--sidebar-width-collapsed) !important;
-    }
-
     .main-content {
         margin-left: var(--sidebar-width);
         /* El container-fluid trae width:100% del ancho total de la página;
@@ -303,52 +265,6 @@ body {
            dashboard). */
         width: calc(100% - var(--sidebar-width));
         padding-top: 20px;
-        transition: margin-left 0.15s ease, width 0.15s ease;
-    }
-
-    body.sidebar-collapsed .main-content {
-        margin-left: var(--sidebar-width-collapsed);
-        width: calc(100% - var(--sidebar-width-collapsed));
-    }
-
-    /* Colapsado: solo íconos. Se ocultan etiquetas de texto, marca, chevrons
-       y todo lo que no entre en un riel angosto; los <title> de cada link
-       quedan como tooltip nativo del navegador para no perder el rótulo. */
-    body.sidebar-collapsed .sidebar-label,
-    body.sidebar-collapsed .sidebar-brand-text,
-    body.sidebar-collapsed .sidebar-chevron,
-    body.sidebar-collapsed .sidebar-user-info {
-        display: none;
-    }
-
-    body.sidebar-collapsed .sidebar-toggle-icon {
-        transform: rotate(180deg);
-    }
-
-    body.sidebar-collapsed .sidebar-brand {
-        justify-content: center;
-    }
-
-    body.sidebar-collapsed .sidebar-brand > a {
-        display: none;
-    }
-
-    body.sidebar-collapsed .sidebar-nav .nav-link,
-    body.sidebar-collapsed .sidebar-group-toggle,
-    body.sidebar-collapsed .sidebar-footer-link {
-        justify-content: center;
-    }
-
-    body.sidebar-collapsed .sidebar-subnav {
-        padding-left: 0;
-    }
-
-    /* Los submenús (Reportes/Configuración) no tienen forma clara de
-       mostrarse solo-ícono con varios ítems distintos bajo un mismo
-       ícono de grupo; en colapsado se ocultan y quedan accesibles
-       expandiendo el sidebar de nuevo con el botón «. */
-    body.sidebar-collapsed .sidebar-subnav {
-        display: none;
     }
 }
 
@@ -485,50 +401,132 @@ h2, h4, h5.card-title {
 }
 
 /* =========================================================
-   SALÓN DE MESAS
+   SALÓN DE MESAS (ronda 18: tarjeta clara con borde de color +
+   badge de estado en vez del bloque sólido de color con texto
+   blanco de antes. Calcado del mockup aprobado por el cliente
+   — ver el link del mockup en MEMORY.md, ronda 14.)
    ========================================================= */
 .mesa-card {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
     text-decoration: none;
-    border-radius: 12px;
-    padding: 24px 10px;
-    text-align: center;
-    font-weight: bold;
-    font-size: 1.25rem;
-    color: #fff;
+    background-color: var(--superficie);
+    border-radius: 16px;
+    padding: 22px;
+    box-shadow: var(--sombra-tarjeta);
+    border: 1.5px solid transparent;
     transition: transform 0.1s ease-in-out;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-    border: 3px solid transparent;
+    color: inherit;
 }
 
 .mesa-card:hover,
 .mesa-card:active {
-    transform: scale(1.03);
-    color: #fff;
+    transform: scale(1.02);
+    color: inherit;
+}
+
+.mesa-card-fila {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.mesa-card-nombre {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 1.15rem;
+    font-weight: 600;
 }
 
 .mesa-card .mesa-estado-texto {
-    font-size: 0.95rem;
-    font-weight: 600;
+    font-size: 0.7rem;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    display: block;
-    margin-top: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.mesa-card .mesa-capacidad {
+    color: var(--texto-secundario);
+    font-size: 0.85rem;
 }
 
 .mesa-card .mesa-tiempo {
-    display: block;
-    font-size: 0.85rem;
-    font-weight: 500;
-    margin-top: 4px;
-    opacity: 0.95;
+    font-size: 0.8rem;
+    font-weight: 600;
 }
 
-/* Colores de estado bien diferenciados y legibles a distancia */
-.mesa-libre { background-color: #1e7e34; }
-.mesa-ocupada { background-color: #c0392b; }
-.mesa-cuenta_pedida { background-color: #d68910; }
-.mesa-inactiva { background-color: #6c757d; pointer-events: none; }
+/* Colores de estado: borde + fondo apenas teñido (salvo libre, que queda
+   blanco) + badge de estado con fondo sólido. */
+.mesa-libre {
+    border-color: var(--exito);
+}
+.mesa-libre .mesa-estado-texto {
+    background-color: var(--exito-suave);
+    color: var(--exito);
+}
+
+.mesa-ocupada {
+    border-color: var(--marca-principal);
+    background-color: var(--marca-suave);
+}
+.mesa-ocupada .mesa-estado-texto {
+    background-color: var(--marca-principal);
+    color: #fff;
+}
+.mesa-ocupada .mesa-tiempo {
+    color: var(--marca-principal-oscuro);
+}
+
+.mesa-cuenta_pedida {
+    border-color: var(--alerta);
+    background-color: var(--alerta-suave);
+}
+.mesa-cuenta_pedida .mesa-estado-texto {
+    background-color: var(--alerta);
+    color: #fff;
+}
+.mesa-cuenta_pedida .mesa-tiempo {
+    color: #8a6420;
+}
+
+.mesa-inactiva {
+    border-color: #c9c2b8;
+    background-color: #f2ede3;
+    pointer-events: none;
+}
+.mesa-inactiva .mesa-estado-texto {
+    background-color: #e2dccf;
+    color: var(--texto-secundario);
+}
+
+/* Referencia de colores al pie de la grilla de mesas */
+.leyenda-mesas {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: var(--texto-secundario);
+    margin-top: 20px;
+}
+
+.leyenda-mesas .leyenda-punto {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.leyenda-mesas .leyenda-punto::before {
+    content: '';
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+    background-color: var(--color-punto, var(--texto-secundario));
+    display: inline-block;
+}
 
 /* =========================================================
    TOMA DE PEDIDOS (POS) — pensado para uso táctil de pie
@@ -546,51 +544,53 @@ h2, h4, h5.card-title {
     text-align: left;
     white-space: normal;
     font-size: 1.05rem;
-    border-width: 2px;
-    color: #2b2b2b;
-    background-color: #fff;
-    border-color: #d8cfc4;
+    border-width: 1.5px;
+    color: #2b2320;
+    background-color: var(--superficie);
+    border-color: var(--borde-suave);
+    box-shadow: var(--sombra-tarjeta);
     transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
 }
 
 .producto-btn:hover,
 .producto-btn:focus {
-    color: #2b2b2b;
-    background-color: rgba(139, 46, 46, 0.1);
+    color: #2b2320;
+    background-color: rgba(139, 46, 46, 0.06);
     border-color: var(--marca-principal);
 }
 
 .producto-btn:active {
-    color: #2b2b2b;
-    background-color: rgba(139, 46, 46, 0.18);
+    color: #2b2320;
+    background-color: rgba(139, 46, 46, 0.14);
     border-color: var(--marca-principal);
     transform: scale(0.97);
 }
 
+/* El precio siempre en el color de marca (no gris que recién se colorea
+   al tocar): es el dato que más importa leer rápido en esta grilla. */
 .producto-btn .producto-precio {
     font-size: 0.95rem;
-    font-weight: 600;
-    color: #6b6b6b;
-}
-
-.producto-btn:hover .producto-precio,
-.producto-btn:active .producto-precio {
-    color: var(--marca-principal-oscuro);
+    font-weight: 700;
+    color: var(--marca-principal);
 }
 
 /* Categorías del POS como chips grandes y táctiles en vez de un
-   desplegable o pestañas angostas */
+   desplegable o pestañas angostas. Solo el chip ACTIVO lleva color de
+   marca — los demás quedan neutros (borde/fondo suaves), para que la
+   categoría elegida resalte de un vistazo en vez de que todos los chips
+   compitan por atención con el mismo borde rojo. */
 #tabsCategorias .nav-link {
     font-size: 1.05rem;
     font-weight: 600;
     padding: 10px 18px;
     border-radius: 999px;
-    border: 2px solid var(--marca-principal-claro);
+    border: 1.5px solid var(--borde-suave);
     margin: 3px;
-    background-color: #fff;
+    background-color: var(--superficie);
+    color: var(--texto-secundario);
     -webkit-appearance: none;
     appearance: none;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 #tabsCategorias .nav-link:hover {
@@ -664,8 +664,9 @@ h2, h4, h5.card-title {
     display: none !important;
 }
 
-/* Toast de confirmación al agregar un producto (feedback visual, no
-   silencioso). Se muestra y desaparece solo via JS. */
+/* Toast de confirmación/error genérico del POS (feedback visual, no
+   silencioso: reemplaza a los alert() nativos, ronda 13). Se muestra y
+   desaparece solo via JS. */
 #toastAgregado {
     position: fixed;
     bottom: 24px;
@@ -682,11 +683,57 @@ h2, h4, h5.card-title {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.18s ease, transform 0.18s ease;
+    display: flex;
+    align-items: center;
+    gap: 14px;
 }
 
 #toastAgregado.mostrar {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+}
+
+/* Variante de error (stock insuficiente, fallo de red, etc.): mismo
+   componente visual que el toast de éxito, distinto color, para no mezclar
+   la confirmación con un alert() nativo del navegador. */
+#toastAgregado.toast-error {
+    background-color: #b02a2a;
+}
+
+.toast-accion {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    color: #fff;
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.toast-accion:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Stepper +/- de cantidad en el carrito del POS (ronda 13), solo para
+   productos por unidad (los productos por peso siguen con cantidad de
+   texto fijo, no tiene sentido un "-1" en kg). */
+.stepper-cantidad {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    justify-content: center;
+}
+
+.stepper-cantidad span {
+    min-width: 2.2em;
+    text-align: center;
+}
+
+.stepper-cantidad .btn {
+    padding: 0.1rem 0.5rem;
+    line-height: 1.2;
 }
 
 .stock-bajo {
@@ -801,8 +848,11 @@ h2, h4, h5.card-title {
 
 @media (max-width: 576px) {
     .mesa-card {
+        padding: 16px;
+    }
+
+    .mesa-card-nombre {
         font-size: 1.05rem;
-        padding: 18px 6px;
     }
 
     .btn-lg-touch {
@@ -813,4 +863,148 @@ h2, h4, h5.card-title {
     h2 {
         font-size: 1.4rem;
     }
+}
+
+/* =========================================================
+   RONDA 14 — reskin visual (tipografía de marca + tarjetas,
+   botones y badges más redondeados/suaves), para que el
+   sistema real se vea como el mockup aprobado por el cliente.
+   Reutiliza los --marca-* ya definidos arriba; solo se suman
+   los tokens que faltaban (borde suave, texto secundario,
+   sombra de tarjeta). No cambia ningún comportamiento, solo
+   apariencia — no debería requerir tocar HTML/PHP de las
+   pantallas, salvo el subtítulo del sidebar (ver header.php).
+   ========================================================= */
+:root {
+    --borde-suave: #e7dcc8;
+    --texto-secundario: #7c6c5d;
+    --sombra-tarjeta: 0 1px 2px rgba(43, 35, 32, .06), 0 10px 24px rgba(43, 35, 32, .08);
+    --superficie: #fff;
+    /* Variante clara del rojo de marca (mesa ocupada, resaltados suaves) —
+       distinta de --marca-crema, que es el tono de fondo general. */
+    --marca-suave: #f4e4e0;
+    /* Tokens semánticos con su variante "suave" (badge de estado con fondo
+       tenue + texto del color fuerte), ronda 18 — calcados del mockup
+       aprobado por el cliente. */
+    --exito: #3f7a5c;
+    --exito-suave: #e3f0e9;
+    --peligro: #b23a3a;
+    --peligro-suave: #f8e4e2;
+    --alerta: #b8863a;
+    --alerta-suave: #fbf0dc;
+    --info: #3f6b8a;
+    --info-suave: #e6eef3;
+}
+
+body {
+    font-family: 'Work Sans', 'Segoe UI', sans-serif;
+}
+
+/* Fraunces (serif con carácter) para títulos y números grandes, igual
+   que en el mockup — Work Sans se mantiene para todo el resto del texto
+   (tablas, formularios, botones), no se aplica Fraunces global para no
+   perder legibilidad en bloques de texto largo. */
+h1, h2, h3, h4, h5, h6,
+.card-title,
+.sidebar-brand-text,
+.fs-3,
+legend {
+    font-family: 'Fraunces', Georgia, serif;
+}
+
+.sidebar-brand-textos {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+    overflow: hidden;
+}
+
+.sidebar-brand-subtitulo {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.65);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Tarjetas con esquinas más redondeadas y sombra suave en vez del borde
+   plano por defecto de Bootstrap — mismo lenguaje visual en toda la app. */
+.card {
+    border-radius: 14px;
+    border-color: var(--borde-suave);
+    box-shadow: var(--sombra-tarjeta);
+}
+
+/* Badges como píldoras (antes: esquinas apenas redondeadas de Bootstrap
+   por defecto). */
+.badge {
+    border-radius: 999px;
+    font-weight: 700;
+    padding: 0.4em 0.85em;
+}
+
+/* Ronda 18: los colores planos de Bootstrap (bg-success/bg-danger/etc.)
+   pasan a la versión "suave" (fondo tenue + texto del color fuerte) en
+   TODOS los badges de estado del sistema (caja, egresos, productos,
+   usuarios, mesas...), calcado del mockup aprobado por el cliente — sin
+   tener que tocar el HTML de cada pantalla, ya usan bg-success/bg-danger/
+   bg-secondary como clase. La única excepción a propósito es el badge de
+   "Stock bajo" del dashboard (`.badge-alerta-fuerte`), que se deja sólido
+   porque busca llamar la atención, no describir un estado tranquilo. */
+.badge.bg-success {
+    background-color: var(--exito-suave) !important;
+    color: var(--exito) !important;
+}
+.badge.bg-danger {
+    background-color: var(--peligro-suave) !important;
+    color: var(--peligro) !important;
+}
+.badge.bg-warning {
+    background-color: var(--alerta-suave) !important;
+    color: #8a6420 !important;
+}
+.badge.bg-info {
+    background-color: var(--info-suave) !important;
+    color: var(--info) !important;
+}
+.badge.bg-secondary {
+    background-color: var(--marca-crema-oscuro) !important;
+    color: var(--texto-secundario) !important;
+}
+.badge.bg-primary {
+    background-color: var(--marca-suave) !important;
+    color: var(--marca-principal-oscuro) !important;
+}
+.badge.bg-danger.badge-alerta-fuerte {
+    background-color: var(--peligro) !important;
+    color: #fff !important;
+}
+
+/* Botones, inputs y alerts comparten el mismo radio que las tarjetas. */
+.btn {
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+.alert {
+    border-radius: 12px;
+}
+
+.form-control,
+.form-select {
+    border-radius: 9px;
+}
+
+/* Texto de tabla en tono secundario (en vez del negro por defecto) y
+   encabezados en versalita chica, para el mismo aire más editorial que
+   el resto del reskin. */
+.table {
+    --bs-table-color: var(--texto-secundario);
+}
+
+.table thead th {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }

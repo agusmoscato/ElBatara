@@ -11,7 +11,7 @@ $paraLlevar = isset($_GET['para_llevar']);
 
 // --- Determinar o crear el pedido sobre el que vamos a trabajar ---
 if ($pedidoId) {
-    $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE id = ? AND estado IN ('abierto', 'en_preparacion', 'entregado')");
+    $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE id = ? AND estado IN ('abierto', 'cuenta_pedida')");
     $stmt->execute([$pedidoId]);
     $pedido = $stmt->fetch();
     if (!$pedido) {
@@ -19,11 +19,21 @@ if ($pedidoId) {
     }
 } elseif ($mesaId) {
     // ¿Ya hay un pedido abierto para esta mesa?
-    $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE mesa_id = ? AND estado IN ('abierto', 'en_preparacion', 'entregado') LIMIT 1");
+    $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE mesa_id = ? AND estado IN ('abierto', 'cuenta_pedida') LIMIT 1");
     $stmt->execute([$mesaId]);
     $pedido = $stmt->fetch();
 
     if (!$pedido) {
+        // No se puede empezar un pedido nuevo sin una caja abierta: esa
+        // venta quedaría "fantasma", fuera de todo cierre/conciliación
+        // (ronda 13). Reabrir un pedido YA creado (rama de arriba) no se
+        // bloquea, para no dejar a un mozo varado si la caja se cierra
+        // mientras está cargando un pedido.
+        if (!hayCajaAbierta($pdo)) {
+            flashError('Abrí la caja antes de tomar pedidos.');
+            redirigir('caja/abrir.php');
+        }
+
         $stmtMesa = $pdo->prepare('SELECT * FROM mesas WHERE id = ? AND activo = 1');
         $stmtMesa->execute([$mesaId]);
         $mesa = $stmtMesa->fetch();
@@ -31,18 +41,30 @@ if ($pedidoId) {
             redirigir('mesas/salon.php');
         }
 
-        $pdo->beginTransaction();
-        $stmt = $pdo->prepare("INSERT INTO pedidos (mesa_id, canal, usuario_id, estado) VALUES (?, 'mesa', ?, ?)");
-        $stmt->execute([$mesaId, $_SESSION['usuario_id'], 'abierto']);
-        $pedidoId = (int)$pdo->lastInsertId();
-        $pdo->prepare("UPDATE mesas SET estado = 'ocupada' WHERE id = ?")->execute([$mesaId]);
-        $pdo->commit();
+        $resultado = ejecutarTransaccion($pdo, function (PDO $pdo) use ($mesaId) {
+            $stmt = $pdo->prepare("INSERT INTO pedidos (mesa_id, canal, usuario_id, estado) VALUES (?, 'mesa', ?, ?)");
+            $stmt->execute([$mesaId, $_SESSION['usuario_id'], 'abierto']);
+            $pedidoId = (int)$pdo->lastInsertId();
+            $pdo->prepare("UPDATE mesas SET estado = 'ocupada' WHERE id = ?")->execute([$mesaId]);
+            return $pedidoId;
+        }, 'crear pedido de mesa', 'No se pudo crear el pedido. Intentá nuevamente.');
+
+        if (!$resultado['ok']) {
+            flashError($resultado['error']);
+            redirigir('mesas/salon.php');
+        }
+        $pedidoId = $resultado['datos'];
 
         $stmt = $pdo->prepare('SELECT * FROM pedidos WHERE id = ?');
         $stmt->execute([$pedidoId]);
         $pedido = $stmt->fetch();
     }
 } elseif ($paraLlevar) {
+    if (!hayCajaAbierta($pdo)) {
+        flashError('Abrí la caja antes de tomar pedidos.');
+        redirigir('caja/abrir.php');
+    }
+
     $stmt = $pdo->prepare("INSERT INTO pedidos (mesa_id, canal, usuario_id, estado) VALUES (NULL, 'mostrador', ?, ?)");
     $stmt->execute([$_SESSION['usuario_id'], 'abierto']);
     $pedidoId = (int)$pdo->lastInsertId();
@@ -212,10 +234,20 @@ require __DIR__ . '/../includes/header.php';
                 <td class="col-producto">
                   <span class="nombre-producto-item" title="<?= h($it['producto_nombre']) ?>"><?= h($it['producto_nombre']) ?></span>
                 </td>
-                <td class="col-cantidad"><?= formatearCantidad((float)$it['cantidad'], $it['tipo_venta']) ?></td>
+                <td class="col-cantidad">
+                  <?php if ($it['tipo_venta'] === 'unidad'): ?>
+                    <div class="stepper-cantidad">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="decrementarItem(<?= (int)$it['id'] ?>, <?= (int)$it['producto_id'] ?>, '<?= h(addslashes($it['producto_nombre'])) ?>')">−</button>
+                      <span><?= formatearCantidad((float)$it['cantidad'], $it['tipo_venta']) ?></span>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="enviarAgregarItem(<?= (int)$it['producto_id'] ?>, 1, '<?= h(addslashes($it['producto_nombre'])) ?>')">+</button>
+                    </div>
+                  <?php else: ?>
+                    <?= formatearCantidad((float)$it['cantidad'], $it['tipo_venta']) ?>
+                  <?php endif; ?>
+                </td>
                 <td class="col-subtotal"><?= formatearMoneda((float)$it['subtotal']) ?></td>
                 <td class="col-quitar">
-                  <button class="btn btn-sm btn-outline-danger" onclick="quitarItem(<?= (int)$it['id'] ?>)">×</button>
+                  <button class="btn btn-sm btn-outline-danger" onclick="quitarItem(<?= (int)$it['id'] ?>, <?= (int)$it['producto_id'] ?>, '<?= h(addslashes($it['producto_nombre'])) ?>', <?= (float)$it['cantidad'] ?>)">×</button>
                 </td>
               </tr>
             <?php endforeach; ?>
@@ -338,18 +370,35 @@ document.getElementById('btnLimpiarBusqueda').addEventListener('click', function
   aplicarFiltroProductos();
 });
 
-function mostrarToast(mensaje) {
+function mostrarToast(mensaje, opciones) {
+  opciones = opciones || {};
   const toast = document.getElementById('toastAgregado');
-  toast.textContent = mensaje;
+  toast.innerHTML = '';
+  toast.classList.toggle('toast-error', !!opciones.error);
+  const texto = document.createElement('span');
+  texto.textContent = mensaje;
+  toast.appendChild(texto);
+  if (opciones.accionTexto && opciones.accionFn) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'toast-accion';
+    btn.textContent = opciones.accionTexto;
+    btn.onclick = function () {
+      toast.classList.remove('mostrar');
+      opciones.accionFn();
+    };
+    toast.appendChild(btn);
+  }
   toast.classList.add('mostrar');
   clearTimeout(window._toastTimeout);
-  window._toastTimeout = setTimeout(() => toast.classList.remove('mostrar'), 1400);
+  const duracion = opciones.duracionMs || 1400;
+  window._toastTimeout = setTimeout(() => toast.classList.remove('mostrar'), duracion);
 }
 
 function agregarProducto(id, nombre, tipoVenta, precio) {
   if (tipoVenta === 'peso') {
     if (!modalCantidad) {
-      alert('No se pudo abrir el selector de cantidad. Recargá la página e intentá de nuevo.');
+      mostrarToast('No se pudo abrir el selector de cantidad. Recargá la página e intentá de nuevo.', { error: true, duracionMs: 3000 });
       return;
     }
     productoPendiente = { id, nombre };
@@ -381,22 +430,47 @@ function enviarAgregarItem(productoId, cantidad, nombre) {
       mostrarToast('✓ ' + nombre + ' agregado');
     }
   })
-  .catch(() => alert('No se pudo agregar el producto.'));
+  .catch(() => mostrarToast('No se pudo agregar el producto.', { error: true, duracionMs: 3000 }));
 }
 
-function quitarItem(itemId) {
+function quitarItem(itemId, productoId, nombre, cantidad) {
   fetch('quitar_item.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `pedido_id=${PEDIDO_ID}&item_id=${itemId}&csrf_token=${encodeURIComponent(CSRF_TOKEN)}`
   })
   .then(r => r.json())
+  .then(data => {
+    actualizarPedido(data);
+    if (!data.error) {
+      mostrarToast(nombre + ' quitado', {
+        accionTexto: 'Deshacer',
+        accionFn: () => enviarAgregarItem(productoId, cantidad, nombre),
+        duracionMs: 4000,
+      });
+    }
+  })
+  .catch(() => mostrarToast('No se pudo quitar el producto.', { error: true, duracionMs: 3000 }));
+}
+
+function decrementarItem(itemId, productoId, nombre) {
+  fetch('quitar_item.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `pedido_id=${PEDIDO_ID}&item_id=${itemId}&cantidad_a_quitar=1&csrf_token=${encodeURIComponent(CSRF_TOKEN)}`
+  })
+  .then(r => r.json())
   .then(actualizarPedido)
-  .catch(() => alert('No se pudo quitar el producto.'));
+  .catch(() => mostrarToast('No se pudo quitar el producto.', { error: true, duracionMs: 3000 }));
 }
 
 function cancelarPedido() {
-  if (!confirm('¿Seguro que querés cancelar este pedido? Se va a devolver el stock de los productos cargados.')) {
+  const motivo = prompt('¿Por qué cancelás este pedido? (obligatorio; se va a devolver el stock de los productos cargados)');
+  if (motivo === null) {
+    return; // el mozo tocó "Cancelar" del prompt, no confirmar nada
+  }
+  if (!motivo.trim()) {
+    alert('Tenés que escribir un motivo para cancelar el pedido.');
     return;
   }
   const form = document.createElement('form');
@@ -404,32 +478,22 @@ function cancelarPedido() {
   form.action = 'cancelar.php';
   form.innerHTML = `
     <input type="hidden" name="pedido_id" value="${PEDIDO_ID}">
+    <input type="hidden" name="motivo" value="${motivo.trim().replace(/"/g, '&quot;')}">
     <input type="hidden" name="csrf_token" value="${CSRF_TOKEN}">
   `;
   document.body.appendChild(form);
   form.submit();
 }
 
-function enviarCocina() {
-  fetch('enviar_cocina.php', {
+function pedirCuenta() {
+  fetch('pedir_cuenta.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `pedido_id=${PEDIDO_ID}&csrf_token=${encodeURIComponent(CSRF_TOKEN)}`
   })
   .then(r => r.json())
   .then(actualizarBotonEstadoPedido)
-  .catch(() => alert('No se pudo enviar el pedido a cocina.'));
-}
-
-function marcarEntregado() {
-  fetch('marcar_entregado.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `pedido_id=${PEDIDO_ID}&csrf_token=${encodeURIComponent(CSRF_TOKEN)}`
-  })
-  .then(r => r.json())
-  .then(actualizarBotonEstadoPedido)
-  .catch(() => alert('No se pudo marcar el pedido como entregado.'));
+  .catch(() => mostrarToast('No se pudo pedir la cuenta.', { error: true, duracionMs: 3000 }));
 }
 
 // Reproduce en JS el mismo HTML que renderBotonEstadoPedido() en
@@ -437,20 +501,18 @@ function marcarEntregado() {
 // posición de scroll) solo por cambiar este botón.
 function actualizarBotonEstadoPedido(data) {
   if (data.error) {
-    alert(data.error);
+    mostrarToast(data.error, { error: true, duracionMs: 3000 });
     return;
   }
   const cont = document.getElementById('botonEstadoPedido');
-  if (data.estado === 'en_preparacion') {
-    cont.innerHTML = '<button class="btn btn-info btn-lg-touch" onclick="marcarEntregado()" title="Tocar cuando se lleve el pedido a la mesa">En preparación (tocar al entregar)</button>';
-  } else if (data.estado === 'entregado') {
-    cont.innerHTML = '<span class="badge bg-success align-self-center fs-6">✓ Entregado</span>';
+  if (data.estado === 'cuenta_pedida') {
+    cont.innerHTML = '<span class="badge bg-warning align-self-center fs-6">🧾 Cuenta pedida</span>';
   }
 }
 
 function actualizarPedido(data) {
   if (data.error) {
-    alert(data.error);
+    mostrarToast(data.error, { error: true, duracionMs: 3000 });
     return;
   }
   const tbody = document.getElementById('itemsBody');
@@ -458,18 +520,51 @@ function actualizarPedido(data) {
   data.items.forEach(it => {
     const tr = document.createElement('tr');
     tr.dataset.itemId = it.id;
-    tr.innerHTML = `
-      <td class="col-producto"><span class="nombre-producto-item"></span></td>
-      <td class="col-cantidad"></td>
-      <td class="col-subtotal"></td>
-      <td class="col-quitar"><button class="btn btn-sm btn-outline-danger">×</button></td>
-    `;
-    const spanNombre = tr.querySelector('.nombre-producto-item');
+
+    const tdProducto = document.createElement('td');
+    tdProducto.className = 'col-producto';
+    const spanNombre = document.createElement('span');
+    spanNombre.className = 'nombre-producto-item';
     spanNombre.textContent = it.producto_nombre;
     spanNombre.title = it.producto_nombre;
-    tr.querySelector('.col-cantidad').textContent = it.cantidad_texto;
-    tr.querySelector('.col-subtotal').textContent = it.subtotal_texto;
-    tr.querySelector('button').onclick = () => quitarItem(it.id);
+    tdProducto.appendChild(spanNombre);
+
+    const tdCantidad = document.createElement('td');
+    tdCantidad.className = 'col-cantidad';
+    if (it.tipo_venta === 'unidad') {
+      const div = document.createElement('div');
+      div.className = 'stepper-cantidad';
+      const btnMenos = document.createElement('button');
+      btnMenos.type = 'button';
+      btnMenos.className = 'btn btn-sm btn-outline-secondary';
+      btnMenos.textContent = '−';
+      btnMenos.onclick = () => decrementarItem(it.id, it.producto_id, it.producto_nombre);
+      const span = document.createElement('span');
+      span.textContent = it.cantidad_texto;
+      const btnMas = document.createElement('button');
+      btnMas.type = 'button';
+      btnMas.className = 'btn btn-sm btn-outline-secondary';
+      btnMas.textContent = '+';
+      btnMas.onclick = () => enviarAgregarItem(it.producto_id, 1, it.producto_nombre);
+      div.append(btnMenos, span, btnMas);
+      tdCantidad.appendChild(div);
+    } else {
+      tdCantidad.textContent = it.cantidad_texto;
+    }
+
+    const tdSubtotal = document.createElement('td');
+    tdSubtotal.className = 'col-subtotal';
+    tdSubtotal.textContent = it.subtotal_texto;
+
+    const tdQuitar = document.createElement('td');
+    tdQuitar.className = 'col-quitar';
+    const btnQuitar = document.createElement('button');
+    btnQuitar.className = 'btn btn-sm btn-outline-danger';
+    btnQuitar.textContent = '×';
+    btnQuitar.onclick = () => quitarItem(it.id, it.producto_id, it.producto_nombre, it.cantidad);
+    tdQuitar.appendChild(btnQuitar);
+
+    tr.append(tdProducto, tdCantidad, tdSubtotal, tdQuitar);
     tbody.appendChild(tr);
   });
   document.getElementById('totalPedido').textContent = data.total_texto;

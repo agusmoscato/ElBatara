@@ -11,12 +11,18 @@ validarTokenCsrf();
 
 $pdo = obtenerConexion();
 $pedidoId = intPositivoONull($_POST['pedido_id'] ?? null);
+$motivo = trim($_POST['motivo'] ?? '');
 
 if (!$pedidoId) {
     redirigir('mesas/salon.php');
 }
 
-$stmt = $pdo->prepare("SELECT * FROM pedidos WHERE id = ? AND estado IN ('abierto', 'en_preparacion', 'entregado')");
+if ($motivo === '') {
+    flashError('Tenés que indicar un motivo para cancelar el pedido.');
+    redirigir('mesas/salon.php');
+}
+
+$stmt = $pdo->prepare("SELECT * FROM pedidos WHERE id = ? AND estado IN ('abierto', 'cuenta_pedida')");
 $stmt->execute([$pedidoId]);
 $pedido = $stmt->fetch();
 
@@ -24,7 +30,7 @@ if (!$pedido) {
     redirigir('mesas/salon.php');
 }
 
-$resultado = ejecutarTransaccion($pdo, function (PDO $pdo) use ($pedidoId, $pedido) {
+$resultado = ejecutarTransaccion($pdo, function (PDO $pdo) use ($pedidoId, $pedido, $motivo) {
     // Devolvemos al stock todos los productos que estaban cargados en el
     // pedido en dos operaciones batch (UPDATE con JOIN + INSERT...SELECT)
     // en vez de una consulta por ítem: mismo resultado, sin loop de
@@ -40,8 +46,8 @@ $resultado = ejecutarTransaccion($pdo, function (PDO $pdo) use ($pedidoId, $pedi
                     FROM pedido_items WHERE pedido_id = ?")
         ->execute([$_SESSION['usuario_id'], $pedidoId]);
 
-    $pdo->prepare("UPDATE pedidos SET estado = 'cancelado', cancelado_en = NOW(), cancelado_por_id = ? WHERE id = ?")
-        ->execute([$_SESSION['usuario_id'], $pedidoId]);
+    $pdo->prepare("UPDATE pedidos SET estado = 'cancelado', cancelado_en = NOW(), cancelado_por_id = ?, motivo_cancelacion = ? WHERE id = ?")
+        ->execute([$_SESSION['usuario_id'], $motivo, $pedidoId]);
 
     if ($pedido['mesa_id']) {
         $pdo->prepare("UPDATE mesas SET estado = 'libre' WHERE id = ?")->execute([$pedido['mesa_id']]);

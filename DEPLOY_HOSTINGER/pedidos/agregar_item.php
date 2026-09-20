@@ -27,7 +27,7 @@ if (!$pedidoId || !$productoId || $cantidad === false || $cantidad <= 0) {
     exit;
 }
 
-$stmt = $pdo->prepare("SELECT * FROM pedidos WHERE id = ? AND estado IN ('abierto', 'en_preparacion', 'entregado')");
+$stmt = $pdo->prepare("SELECT * FROM pedidos WHERE id = ? AND estado IN ('abierto', 'cuenta_pedida')");
 $stmt->execute([$pedidoId]);
 $pedido = $stmt->fetch();
 if (!$pedido) {
@@ -55,10 +55,24 @@ $resultado = ejecutarTransaccion($pdo, function (PDO $pdo) use ($productoId, $pe
         throw new ValidacionException('Stock insuficiente. Disponible: ' . formatearCantidad((float)$producto['stock_actual'], $producto['tipo_venta']));
     }
 
-    $subtotal = round($cantidad * (float)$producto['precio'], 2);
+    // Si el producto ya está en el carrito, sumamos a la línea existente en
+    // vez de crear una línea nueva (ronda 13: antes cada toque insertaba una
+    // fila propia, y el mismo producto tocado varias veces aparecía
+    // duplicado en vez de acumulado).
+    $stmtExistente = $pdo->prepare('SELECT id, cantidad, subtotal FROM pedido_items WHERE pedido_id = ? AND producto_id = ? FOR UPDATE');
+    $stmtExistente->execute([$pedidoId, $productoId]);
+    $itemExistente = $stmtExistente->fetch();
 
-    $stmt = $pdo->prepare('INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio_unitario, subtotal) VALUES (?, ?, ?, ?, ?)');
-    $stmt->execute([$pedidoId, $productoId, $cantidad, $producto['precio'], $subtotal]);
+    if ($itemExistente) {
+        $cantidadNueva = (float)$itemExistente['cantidad'] + $cantidad;
+        $subtotalNuevo = round($cantidadNueva * (float)$producto['precio'], 2);
+        $pdo->prepare('UPDATE pedido_items SET cantidad = ?, subtotal = ? WHERE id = ?')
+            ->execute([$cantidadNueva, $subtotalNuevo, $itemExistente['id']]);
+    } else {
+        $subtotal = round($cantidad * (float)$producto['precio'], 2);
+        $stmt = $pdo->prepare('INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio_unitario, subtotal) VALUES (?, ?, ?, ?, ?)');
+        $stmt->execute([$pedidoId, $productoId, $cantidad, $producto['precio'], $subtotal]);
+    }
 
     $pdo->prepare('UPDATE productos SET stock_actual = stock_actual - ? WHERE id = ?')->execute([$cantidad, $productoId]);
 

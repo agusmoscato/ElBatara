@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-requerirAdmin();
+requerirPermiso('gestionar_egresos_categorias');
 
 $pdo = obtenerConexion();
 
@@ -13,13 +13,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'guard
     $nombre = trim($_POST['nombre'] ?? '');
     $activo = isset($_POST['activo']) ? 1 : 0;
 
-    if ($nombre !== '') {
-        if ($id) {
-            $stmt = $pdo->prepare('UPDATE categorias_egreso SET nombre = ?, activo = ? WHERE id = ?');
-            $stmt->execute([$nombre, $activo, $id]);
-        } else {
-            $stmt = $pdo->prepare('INSERT INTO categorias_egreso (nombre, activo) VALUES (?, ?)');
-            $stmt->execute([$nombre, $activo]);
+    if ($nombre === '') {
+        flashError('El nombre no puede estar vacío.');
+    } else {
+        try {
+            if ($id) {
+                $stmt = $pdo->prepare('UPDATE categorias_egreso SET nombre = ?, activo = ? WHERE id = ?');
+                $stmt->execute([$nombre, $activo, $id]);
+            } else {
+                $stmt = $pdo->prepare('INSERT INTO categorias_egreso (nombre, activo) VALUES (?, ?)');
+                $stmt->execute([$nombre, $activo]);
+            }
+            flashExito('Guardado correctamente.');
+        } catch (PDOException $e) {
+            flashError('No se pudo guardar. Revisá los datos e intentá de nuevo.');
         }
     }
     redirigir('egresos/categorias.php');

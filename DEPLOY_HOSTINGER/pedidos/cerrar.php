@@ -10,7 +10,7 @@ if (!$pedidoId) {
     redirigir('mesas/salon.php');
 }
 
-$stmt = $pdo->prepare("SELECT * FROM pedidos WHERE id = ? AND estado IN ('abierto', 'en_preparacion', 'entregado')");
+$stmt = $pdo->prepare("SELECT * FROM pedidos WHERE id = ? AND estado IN ('abierto', 'cuenta_pedida')");
 $stmt->execute([$pedidoId]);
 $pedido = $stmt->fetch();
 if (!$pedido) {
@@ -35,7 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmtMp->execute([$medioPagoId]);
     $medioPagoValido = $medioPagoId && $stmtMp->fetch();
 
-    if (!$medioPagoValido) {
+    if (!hayCajaAbierta($pdo)) {
+        // La caja se cerró mientras se estaba cobrando este pedido: no se
+        // permite cobrar sin caja abierta (ronda 13), para que la venta no
+        // quede fuera de la conciliación del próximo cierre.
+        $error = 'No hay una caja abierta. Abrí la caja antes de cobrar este pedido.';
+    } elseif (!$medioPagoValido) {
         $error = 'Seleccioná un medio de pago válido.';
     } elseif ($cantidadItems === 0) {
         $error = 'El pedido no tiene productos cargados.';

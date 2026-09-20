@@ -1,15 +1,13 @@
 <?php
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
-requerirAdmin();
+require_once __DIR__ . '/../../includes/paginacion.php';
+requerirPermiso('ver_reportes');
 
 $pdo = obtenerConexion();
 
-$desde = $_GET['desde'] ?? date('Y-m-d', strtotime('-29 days'));
-$hasta = $_GET['hasta'] ?? date('Y-m-d');
-
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) { $desde = date('Y-m-d', strtotime('-29 days')); }
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) { $hasta = date('Y-m-d'); }
+$desde = obtenerFechaGet('desde', date('Y-m-d', strtotime('-29 days')));
+$hasta = obtenerFechaGet('hasta', date('Y-m-d'));
 
 $stmt = $pdo->prepare("SELECT mp.nombre AS medio_pago, COUNT(p.id) AS cantidad, COALESCE(SUM(p.total), 0) AS total
                         FROM pedidos p
@@ -58,6 +56,9 @@ require __DIR__ . '/../../includes/header.php';
   </div>
 </form>
 
+<?php if (empty($filas)): ?>
+  <p class="text-muted">Sin ventas en el rango filtrado.</p>
+<?php else: ?>
 <div class="row">
   <div class="col-md-6">
     <table class="table table-striped bg-white shadow-sm">
@@ -96,5 +97,6 @@ new Chart(document.getElementById('graficoMedios'), {
   options: { responsive: true }
 });
 </script>
+<?php endif; ?>
 
 <?php require __DIR__ . '/../../includes/footer.php'; ?>

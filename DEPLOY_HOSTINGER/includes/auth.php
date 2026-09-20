@@ -39,7 +39,20 @@ const LOGIN_MINUTOS_BLOQUEO = 5;
 function iniciarSesion(string $usuario, string $password)
 {
     $pdo = obtenerConexion();
-    $stmt = $pdo->prepare('SELECT id, nombre, usuario, password_hash, rol, activo, intentos_fallidos, bloqueado_hasta FROM usuarios WHERE usuario = ? LIMIT 1');
+    // LEFT JOIN (no INNER): si por algún motivo el usuario no tiene
+    // perfil_id asignado (o el perfil fue borrado, aunque hoy no hay
+    // forma de borrar uno), la fila igual aparece con las columnas de
+    // permisos en NULL en vez de desaparecer del resultado — y más abajo
+    // esos NULL se tratan como "sin ningún permiso" (fail-closed), no
+    // como que el login falla.
+    $stmt = $pdo->prepare('SELECT u.id, u.nombre, u.usuario, u.password_hash, u.activo, u.intentos_fallidos, u.bloqueado_hasta,
+                                   u.perfil_id, p.nombre AS perfil_nombre,
+                                   p.ver_caja, p.ver_reportes, p.gestionar_productos, p.gestionar_categorias,
+                                   p.gestionar_mesas, p.gestionar_medios_pago, p.gestionar_egresos_categorias,
+                                   p.gestionar_usuarios, p.gestionar_perfiles
+                            FROM usuarios u
+                            LEFT JOIN perfiles p ON p.id = u.perfil_id
+                            WHERE u.usuario = ? LIMIT 1');
     $stmt->execute([$usuario]);
     $fila = $stmt->fetch();
 
@@ -65,7 +78,19 @@ function iniciarSesion(string $usuario, string $password)
 
     $_SESSION['usuario_id']     = $fila['id'];
     $_SESSION['usuario_nombre'] = $fila['nombre'];
-    $_SESSION['usuario_rol']    = $fila['rol'];
+    $_SESSION['perfil_id']      = $fila['perfil_id'] !== null ? (int)$fila['perfil_id'] : null;
+    $_SESSION['perfil_nombre']  = $fila['perfil_nombre'] ?? 'Sin perfil';
+    $_SESSION['permisos'] = [
+        'ver_caja'                     => (bool)$fila['ver_caja'],
+        'ver_reportes'                  => (bool)$fila['ver_reportes'],
+        'gestionar_productos'           => (bool)$fila['gestionar_productos'],
+        'gestionar_categorias'          => (bool)$fila['gestionar_categorias'],
+        'gestionar_mesas'               => (bool)$fila['gestionar_mesas'],
+        'gestionar_medios_pago'         => (bool)$fila['gestionar_medios_pago'],
+        'gestionar_egresos_categorias'  => (bool)$fila['gestionar_egresos_categorias'],
+        'gestionar_usuarios'            => (bool)$fila['gestionar_usuarios'],
+        'gestionar_perfiles'            => (bool)$fila['gestionar_perfiles'],
+    ];
 
     return true;
 }
@@ -97,9 +122,15 @@ function estaLogueado(): bool
     return isset($_SESSION['usuario_id']);
 }
 
-function esAdmin(): bool
+/**
+ * Indica si el usuario logueado tiene un permiso puntual (ronda 17: cada
+ * usuario tiene un perfil, y cada perfil un set de permisos armado a mano
+ * desde Configuración -> Perfiles). Ver $_SESSION['permisos'] en
+ * iniciarSesion(). Reemplaza al esAdmin() de antes, que era todo o nada.
+ */
+function tienePermiso(string $permiso): bool
 {
-    return estaLogueado() && $_SESSION['usuario_rol'] === 'admin';
+    return estaLogueado() && !empty($_SESSION['permisos'][$permiso]);
 }
 
 /**
@@ -115,12 +146,14 @@ function requerirLogin(): void
 }
 
 /**
- * Corta la ejecución si el usuario logueado no es administrador.
+ * Corta la ejecución y redirige al inicio si el usuario logueado no tiene
+ * el permiso puntual pedido. Debe llamarse al principio de toda página
+ * restringida a un permiso (ver tienePermiso()).
  */
-function requerirAdmin(): void
+function requerirPermiso(string $permiso): void
 {
     requerirLogin();
-    if (!esAdmin()) {
+    if (!tienePermiso($permiso)) {
         header('Location: ' . rutaBase() . 'dashboard.php');
         exit;
     }

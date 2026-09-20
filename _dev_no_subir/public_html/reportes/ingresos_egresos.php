@@ -1,14 +1,13 @@
 <?php
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
-requerirAdmin();
+require_once __DIR__ . '/../../includes/paginacion.php';
+requerirPermiso('ver_reportes');
 
 $pdo = obtenerConexion();
 
-$desde = $_GET['desde'] ?? date('Y-m-d', strtotime('-29 days'));
-$hasta = $_GET['hasta'] ?? date('Y-m-d');
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) { $desde = date('Y-m-d', strtotime('-29 days')); }
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) { $hasta = date('Y-m-d'); }
+$desde = obtenerFechaGet('desde', date('Y-m-d', strtotime('-29 days')));
+$hasta = obtenerFechaGet('hasta', date('Y-m-d'));
 
 // --- Ingresos por canal ---
 $stmt = $pdo->prepare("SELECT canal, COUNT(*) AS cantidad, COALESCE(SUM(total), 0) AS total

@@ -15,10 +15,10 @@ $mesas = $pdo->query('SELECT * FROM mesas WHERE activo = 1 AND capacidad > 0 ORD
 
 // Para cada mesa ocupada, buscamos el pedido abierto (id, hora de
 // apertura y estado) para poder linkear directo, mostrar hace cuánto
-// está abierta, y distinguir visualmente "todavía en cocina" de
-// "ya entregado, falta cobrar".
+// está abierta, y distinguir visualmente "todavía consumiendo" de
+// "ya pidió la cuenta, falta cobrar".
 $pedidosAbiertosPorMesa = [];
-$stmt = $pdo->query("SELECT id, mesa_id, creado_en, estado FROM pedidos WHERE estado IN ('abierto', 'en_preparacion', 'entregado')");
+$stmt = $pdo->query("SELECT id, mesa_id, creado_en, estado, total FROM pedidos WHERE estado IN ('abierto', 'cuenta_pedida')");
 foreach ($stmt->fetchAll() as $fila) {
     if ($fila['mesa_id']) {
         $pedidosAbiertosPorMesa[$fila['mesa_id']] = $fila;
@@ -31,7 +31,7 @@ require __DIR__ . '/../includes/header.php';
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2>Salón</h2>
-  <a href="../pedidos/nuevo.php?para_llevar=1" class="btn btn-dark btn-lg-touch">Para llevar</a>
+  <a href="../pedidos/nuevo.php?para_llevar=1" class="btn btn-primary btn-lg-touch">🛍️ Para llevar</a>
 </div>
 
 <div class="row g-3">
@@ -41,13 +41,12 @@ require __DIR__ . '/../includes/header.php';
       if ($pedidoAbierto) {
           $href = '../pedidos/nuevo.php?pedido_id=' . (int)$pedidoAbierto['id'];
           // La mesa se pinta según el estado del pedido, no del campo
-          // "estado" de la mesa: rojo mientras el pedido está en curso
-          // (abierto/en preparación), y el mismo tono ámbar que ya se
-          // usaba para "cuenta pedida" cuando el pedido ya fue
-          // entregado y solo falta cobrarlo.
-          if ($pedidoAbierto['estado'] === 'entregado') {
+          // "estado" de la mesa: en curso mientras el pedido está
+          // abierto, y el tono ámbar de "cuenta pedida" cuando ya se
+          // pidió la cuenta y solo falta cobrar (ronda 20).
+          if ($pedidoAbierto['estado'] === 'cuenta_pedida') {
               $claseEstado = 'mesa-cuenta_pedida';
-              $textoEstado = 'Entregado';
+              $textoEstado = 'Cuenta pedida';
           } else {
               $claseEstado = 'mesa-ocupada';
               $textoEstado = 'Ocupada';
@@ -60,16 +59,25 @@ require __DIR__ . '/../includes/header.php';
     ?>
     <div class="col-6 col-sm-4 col-md-3 col-lg-2">
       <a href="<?= h($href) ?>" class="mesa-card <?= $claseEstado ?>">
-        <?= h($m['nombre']) ?>
-        <span class="mesa-estado-texto"><?= h($textoEstado) ?></span>
+        <div class="mesa-card-fila">
+          <span class="mesa-card-nombre"><?= h($m['nombre']) ?></span>
+          <span class="mesa-estado-texto"><?= h($textoEstado) ?></span>
+        </div>
+        <?php if ((int)$m['capacidad'] > 0): ?>
+          <div class="mesa-capacidad">Capacidad: <?= (int)$m['capacidad'] ?> personas</div>
+        <?php endif; ?>
         <?php if ($pedidoAbierto): ?>
-          <span class="mesa-tiempo">⏱ <?= h(formatearDuracionDesde($pedidoAbierto['creado_en'])) ?></span>
-        <?php elseif ((int)$m['capacidad'] > 0): ?>
-          <span class="mesa-tiempo"><?= (int)$m['capacidad'] ?> personas</span>
+          <div class="mesa-tiempo">⏱ <?= h(formatearDuracionDesde($pedidoAbierto['creado_en'])) ?> · <?= formatearMoneda((float)$pedidoAbierto['total']) ?></div>
         <?php endif; ?>
       </a>
     </div>
   <?php endforeach; ?>
+</div>
+
+<div class="leyenda-mesas no-imprimir">
+  <span class="leyenda-punto" style="--color-punto: var(--exito);">Libre</span>
+  <span class="leyenda-punto" style="--color-punto: var(--marca-principal);">Ocupada</span>
+  <span class="leyenda-punto" style="--color-punto: var(--alerta);">Cuenta pedida</span>
 </div>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>

@@ -1,17 +1,14 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-requerirAdmin();
+require_once __DIR__ . '/../includes/paginacion.php';
+requerirPermiso('ver_reportes');
 
 $pdo = obtenerConexion();
 
 // Rango de fechas por defecto: últimos 7 días.
-$desde = $_GET['desde'] ?? date('Y-m-d', strtotime('-6 days'));
-$hasta = $_GET['hasta'] ?? date('Y-m-d');
-
-// Validamos formato de fecha simple (YYYY-MM-DD) para evitar valores raros.
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) { $desde = date('Y-m-d', strtotime('-6 days')); }
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) { $hasta = date('Y-m-d'); }
+$desde = obtenerFechaGet('desde', date('Y-m-d', strtotime('-6 days')));
+$hasta = obtenerFechaGet('hasta', date('Y-m-d'));
 
 $stmt = $pdo->prepare("SELECT DATE(cerrado_en) AS fecha, COUNT(*) AS cantidad_pedidos, SUM(total) AS total_vendido
                         FROM pedidos
@@ -58,6 +55,9 @@ require __DIR__ . '/../includes/header.php';
   </div>
 </form>
 
+<?php if (empty($filas)): ?>
+  <p class="text-muted">Sin ventas en el rango filtrado.</p>
+<?php else: ?>
 <div class="row mb-4">
   <div class="col-md-8">
     <canvas id="graficoVentas" height="120"></canvas>
@@ -84,7 +84,9 @@ require __DIR__ . '/../includes/header.php';
     <?php endforeach; ?>
   </tbody>
 </table>
+<?php endif; ?>
 
+<?php if (!empty($filas)): ?>
 <script src="<?= $base ?>assets/vendor/chartjs-4.4.4/chart.umd.min.js"></script>
 <script>
 const etiquetas = <?= json_encode(array_map(fn($f) => date('d/m', strtotime($f['fecha'])), $filas)) ?>;
@@ -99,5 +101,6 @@ new Chart(document.getElementById('graficoVentas'), {
   options: { responsive: true, plugins: { legend: { display: false } } }
 });
 </script>
+<?php endif; ?>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>

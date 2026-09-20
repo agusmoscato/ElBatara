@@ -8,6 +8,32 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ---------------------------------------------------------------------
+-- Tabla: perfiles (ronda 17)
+-- Perfiles de acceso configurables a mano (reemplaza el ENUM fijo
+-- admin/empleado que tenía antes usuarios.rol). Un booleano por permiso,
+-- en vez de una tabla de permisos aparte: más simple de armar como ABM
+-- de checkboxes, mismo criterio que medios_pago.es_efectivo (ronda 13).
+-- Cubre solo las áreas que ya estaban restringidas a "admin" antes de
+-- esta ronda (Caja/historial, Reportes, y los ABMs de Configuración);
+-- Salón/POS, Stock y Egresos siguen abiertos a cualquier usuario
+-- logueado, sin permiso propio, a pedido explícito del dueño.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS perfiles (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL UNIQUE,
+    activo TINYINT(1) NOT NULL DEFAULT 1,
+    ver_caja TINYINT(1) NOT NULL DEFAULT 0,
+    ver_reportes TINYINT(1) NOT NULL DEFAULT 0,
+    gestionar_productos TINYINT(1) NOT NULL DEFAULT 0,
+    gestionar_categorias TINYINT(1) NOT NULL DEFAULT 0,
+    gestionar_mesas TINYINT(1) NOT NULL DEFAULT 0,
+    gestionar_medios_pago TINYINT(1) NOT NULL DEFAULT 0,
+    gestionar_egresos_categorias TINYINT(1) NOT NULL DEFAULT 0,
+    gestionar_usuarios TINYINT(1) NOT NULL DEFAULT 0,
+    gestionar_perfiles TINYINT(1) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------
 -- Tabla: usuarios
 -- Usuarios que ingresan al sistema (administradores y empleados)
 -- ---------------------------------------------------------------------
@@ -16,7 +42,11 @@ CREATE TABLE IF NOT EXISTS usuarios (
     nombre VARCHAR(100) NOT NULL,
     usuario VARCHAR(50) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
+    -- Legado, ya no se lee en ningún lado del código desde la ronda 17
+    -- (reemplazado por perfil_id) — se conserva la columna nada más para
+    -- no forzar un DROP COLUMN en la base real de producción.
     rol ENUM('admin', 'empleado') NOT NULL DEFAULT 'empleado',
+    perfil_id INT UNSIGNED NULL,
     activo TINYINT(1) NOT NULL DEFAULT 1,
     -- Bloqueo temporal por fuerza bruta: se cuentan los intentos fallidos
     -- consecutivos y, al llegar al límite, se guarda hasta cuándo queda
@@ -24,7 +54,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
     -- cada login exitoso.
     intentos_fallidos TINYINT UNSIGNED NOT NULL DEFAULT 0,
     bloqueado_hasta DATETIME NULL,
-    creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_usuarios_perfil FOREIGN KEY (perfil_id) REFERENCES perfiles(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------
@@ -83,19 +114,27 @@ CREATE TABLE IF NOT EXISTS mesas (
 CREATE TABLE IF NOT EXISTS medios_pago (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(50) NOT NULL UNIQUE,
-    activo TINYINT(1) NOT NULL DEFAULT 1
+    activo TINYINT(1) NOT NULL DEFAULT 1,
+    -- Marca el medio que representa el efectivo físico de la caja (ronda 13).
+    -- Debe haber exactamente uno en TRUE; se usa para el cálculo de "efectivo
+    -- esperado" en caja/cerrar.php en vez de comparar por el texto del
+    -- nombre, que el ABM permite editar libremente.
+    es_efectivo TINYINT(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------
 -- Tabla: pedidos
 -- Un pedido (comanda) asociado a una mesa (o "para llevar" si mesa_id es NULL)
 -- ---------------------------------------------------------------------
--- Flujo de estados de un pedido:
---   abierto -> en_preparacion -> entregado -> cerrado
---   (cancelado puede pasar desde abierto, en_preparacion o entregado,
---    en cualquier momento antes de cerrado)
--- Pasar por "entregado" es opcional: se puede cobrar directamente desde
--- "abierto" o "en_preparacion" sin marcarlo como entregado antes.
+-- Flujo de estados de un pedido (ronda 20 — antes eran
+-- abierto -> en_preparacion -> entregado -> cerrado; se sacaron los dos
+-- pasos de cocina/entrega a pedido del dueño, que no los usa, y se
+-- reemplazaron por un único paso intermedio "cuenta_pedida"):
+--   abierto -> cuenta_pedida -> cerrado
+--   (cancelado puede pasar desde abierto o cuenta_pedida, en cualquier
+--    momento antes de cerrado)
+-- Pasar por "cuenta_pedida" es opcional: se puede cobrar directamente
+-- desde "abierto" sin pedir la cuenta antes.
 -- canal (ronda 8): 'mesa' si el pedido tiene mesa_id, 'mostrador' si no
 -- (lo que antes era "para llevar"). Se completa al crear el pedido.
 CREATE TABLE IF NOT EXISTS pedidos (
@@ -103,20 +142,29 @@ CREATE TABLE IF NOT EXISTS pedidos (
     mesa_id INT UNSIGNED NULL,
     canal ENUM('mostrador', 'mesa') NOT NULL DEFAULT 'mostrador',
     usuario_id INT UNSIGNED NOT NULL,
-    estado ENUM('abierto', 'en_preparacion', 'entregado', 'cerrado', 'cancelado') NOT NULL DEFAULT 'abierto',
+    estado ENUM('abierto', 'cuenta_pedida', 'cerrado', 'cancelado') NOT NULL DEFAULT 'abierto',
     total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     medio_pago_id INT UNSIGNED NULL,
     creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- entregado_en/entregado_por_id quedan como columnas legadas (ronda 20,
+    -- mismo criterio que usuarios.rol en la ronda 17): ya no se escriben
+    -- desde ningún lado del código, se conservan por no forzar un DROP
+    -- COLUMN en la base real de producción. El dato vivo ahora es
+    -- cuenta_pedida_en/cuenta_pedida_por_id.
     entregado_en DATETIME NULL,
     entregado_por_id INT UNSIGNED NULL,
+    cuenta_pedida_en DATETIME NULL,
+    cuenta_pedida_por_id INT UNSIGNED NULL,
     cerrado_en DATETIME NULL,
     cerrado_por_id INT UNSIGNED NULL,
     cancelado_en DATETIME NULL,
     cancelado_por_id INT UNSIGNED NULL,
+    motivo_cancelacion VARCHAR(255) NULL,
     CONSTRAINT fk_pedidos_mesa FOREIGN KEY (mesa_id) REFERENCES mesas(id),
     CONSTRAINT fk_pedidos_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
     CONSTRAINT fk_pedidos_medio_pago FOREIGN KEY (medio_pago_id) REFERENCES medios_pago(id),
     CONSTRAINT fk_pedidos_entregado_por FOREIGN KEY (entregado_por_id) REFERENCES usuarios(id),
+    CONSTRAINT fk_pedidos_cuenta_pedida_por FOREIGN KEY (cuenta_pedida_por_id) REFERENCES usuarios(id),
     CONSTRAINT fk_pedidos_cerrado_por FOREIGN KEY (cerrado_por_id) REFERENCES usuarios(id),
     CONSTRAINT fk_pedidos_cancelado_por FOREIGN KEY (cancelado_por_id) REFERENCES usuarios(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -260,11 +308,20 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- DATOS DE EJEMPLO
 -- =====================================================================
 
+-- Perfiles iniciales (ronda 17): "Administrador" con los 9 permisos
+-- activados, "Empleado" sin ninguno (mismo alcance que tenían antes el
+-- ENUM rol='admin'/'empleado'). El dueño puede armar perfiles nuevos
+-- desde Configuración -> Perfiles.
+INSERT INTO perfiles (nombre, activo, ver_caja, ver_reportes, gestionar_productos, gestionar_categorias, gestionar_mesas, gestionar_medios_pago, gestionar_egresos_categorias, gestionar_usuarios, gestionar_perfiles)
+SELECT 'Administrador', 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 WHERE NOT EXISTS (SELECT 1 FROM perfiles WHERE nombre = 'Administrador');
+INSERT INTO perfiles (nombre, activo, ver_caja, ver_reportes, gestionar_productos, gestionar_categorias, gestionar_mesas, gestionar_medios_pago, gestionar_egresos_categorias, gestionar_usuarios, gestionar_perfiles)
+SELECT 'Empleado', 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 WHERE NOT EXISTS (SELECT 1 FROM perfiles WHERE nombre = 'Empleado');
+
 -- Usuarios de ejemplo
 -- Contraseña para ambos: "123456" (hash generado con password_hash de PHP, bcrypt)
-INSERT INTO usuarios (nombre, usuario, password_hash, rol) VALUES
-('Administrador', 'admin', '$2y$10$Fk.B64MAzBYM89jgStVeW.FubxIPI0WOhxCo8CryPmNu37Jsbm0Ve', 'admin'),
-('Empleado Demo', 'empleado', '$2y$10$Fk.B64MAzBYM89jgStVeW.FubxIPI0WOhxCo8CryPmNu37Jsbm0Ve', 'empleado');
+INSERT INTO usuarios (nombre, usuario, password_hash, rol, perfil_id) VALUES
+('Administrador', 'admin', '$2y$10$Fk.B64MAzBYM89jgStVeW.FubxIPI0WOhxCo8CryPmNu37Jsbm0Ve', 'admin', (SELECT id FROM perfiles WHERE nombre = 'Administrador')),
+('Empleado Demo', 'empleado', '$2y$10$Fk.B64MAzBYM89jgStVeW.FubxIPI0WOhxCo8CryPmNu37Jsbm0Ve', 'empleado', (SELECT id FROM perfiles WHERE nombre = 'Empleado'));
 
 -- Categorías y productos de ejemplo (genéricos) usados en las rondas 1-3
 -- de desarrollo. Se dejan comentados como referencia de formato; el menú
@@ -292,7 +349,7 @@ INSERT INTO mesas (nombre, capacidad) VALUES
 ('Mesa 1', 4), ('Mesa 2', 4), ('Mesa 3', 2), ('Mesa 4', 6), ('Para Llevar', 0);
 
 -- Medios de pago iniciales (ronda 8)
-INSERT INTO medios_pago (nombre) SELECT 'Efectivo' WHERE NOT EXISTS (SELECT 1 FROM medios_pago WHERE nombre = 'Efectivo');
+INSERT INTO medios_pago (nombre, es_efectivo) SELECT 'Efectivo', 1 WHERE NOT EXISTS (SELECT 1 FROM medios_pago WHERE nombre = 'Efectivo');
 INSERT INTO medios_pago (nombre) SELECT 'Transferencia' WHERE NOT EXISTS (SELECT 1 FROM medios_pago WHERE nombre = 'Transferencia');
 INSERT INTO medios_pago (nombre) SELECT 'QR / Mercado Pago' WHERE NOT EXISTS (SELECT 1 FROM medios_pago WHERE nombre = 'QR / Mercado Pago');
 INSERT INTO medios_pago (nombre) SELECT 'Posnet Débito' WHERE NOT EXISTS (SELECT 1 FROM medios_pago WHERE nombre = 'Posnet Débito');

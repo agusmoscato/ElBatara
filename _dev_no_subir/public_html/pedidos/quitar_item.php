@@ -20,13 +20,14 @@ $pdo = obtenerConexion();
 
 $pedidoId = intPositivoONull($_POST['pedido_id'] ?? null);
 $itemId = intPositivoONull($_POST['item_id'] ?? null);
+$cantidadAQuitar = filter_var($_POST['cantidad_a_quitar'] ?? null, FILTER_VALIDATE_FLOAT);
 
 if (!$pedidoId || !$itemId) {
     echo json_encode(['error' => 'Datos inválidos']);
     exit;
 }
 
-$stmt = $pdo->prepare("SELECT * FROM pedidos WHERE id = ? AND estado IN ('abierto', 'en_preparacion', 'entregado')");
+$stmt = $pdo->prepare("SELECT * FROM pedidos WHERE id = ? AND estado IN ('abierto', 'cuenta_pedida')");
 $stmt->execute([$pedidoId]);
 $pedido = $stmt->fetch();
 if (!$pedido) {
@@ -42,15 +43,29 @@ if (!$item) {
     exit;
 }
 
-$resultado = ejecutarTransaccion($pdo, function (PDO $pdo) use ($item, $pedidoId, $itemId) {
+$resultado = ejecutarTransaccion($pdo, function (PDO $pdo) use ($item, $pedidoId, $itemId, $cantidadAQuitar) {
+    // Quitar solo una porción de la cantidad (stepper "-" del carrito, ronda
+    // 13) en vez de siempre eliminar la línea entera, cuando se pide un
+    // $cantidadAQuitar válido y menor a la cantidad actual del ítem.
+    $cantidadActual = (float)$item['cantidad'];
+    $quitarCompleto = $cantidadAQuitar === false || $cantidadAQuitar <= 0 || $cantidadAQuitar >= $cantidadActual;
+    $cantidadADevolver = $quitarCompleto ? $cantidadActual : $cantidadAQuitar;
+
     // Devolvemos el stock que se había descontado al agregar el producto.
     $pdo->prepare('UPDATE productos SET stock_actual = stock_actual + ? WHERE id = ?')
-        ->execute([$item['cantidad'], $item['producto_id']]);
+        ->execute([$cantidadADevolver, $item['producto_id']]);
 
     $pdo->prepare('INSERT INTO movimientos_stock (producto_id, tipo, cantidad, referencia_pedido_id, usuario_id, nota) VALUES (?, ?, ?, ?, ?, ?)')
-        ->execute([$item['producto_id'], 'ajuste', $item['cantidad'], $pedidoId, $_SESSION['usuario_id'], 'Reversión por eliminación de item del pedido']);
+        ->execute([$item['producto_id'], 'ajuste', $cantidadADevolver, $pedidoId, $_SESSION['usuario_id'], 'Reversión por eliminación de item del pedido']);
 
-    $pdo->prepare('DELETE FROM pedido_items WHERE id = ?')->execute([$itemId]);
+    if ($quitarCompleto) {
+        $pdo->prepare('DELETE FROM pedido_items WHERE id = ?')->execute([$itemId]);
+    } else {
+        $cantidadRestante = $cantidadActual - $cantidadAQuitar;
+        $subtotalRestante = round($cantidadRestante * (float)$item['precio_unitario'], 2);
+        $pdo->prepare('UPDATE pedido_items SET cantidad = ?, subtotal = ? WHERE id = ?')
+            ->execute([$cantidadRestante, $subtotalRestante, $itemId]);
+    }
 
     recalcularTotalPedido($pdo, $pedidoId);
 }, 'quitar item', 'No se pudo quitar el producto');

@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/paginacion.php';
-requerirAdmin();
+requerirPermiso('gestionar_productos');
 
 $pdo = obtenerConexion();
 
@@ -37,6 +37,11 @@ $stmt = $pdo->prepare("SELECT p.*, c.nombre AS categoria_nombre
                         LIMIT $offset, " . FILAS_POR_PAGINA);
 $stmt->execute($params);
 $productos = $stmt->fetchAll();
+
+// Si guardar.php redirigió acá por una validación fallida, recuperamos lo
+// que la persona había tipeado para reabrir el modal prellenado (ronda 13).
+$datosFormFallidos = $_SESSION['flash_form_producto'] ?? null;
+unset($_SESSION['flash_form_producto']);
 
 $tituloPagina = 'Productos';
 require __DIR__ . '/../includes/header.php';
@@ -199,6 +204,28 @@ function editarProducto(p) {
   document.getElementById('f_activo').checked = p.activo == 1;
   document.getElementById('f_precio_a_revisar').checked = p.precio_a_revisar == 1;
 }
+
+<?php if ($datosFormFallidos): ?>
+// Un guardado anterior falló una validación: reabrimos el modal con los
+// mismos datos que la persona ya había tipeado, en vez de dejarla cargar
+// todo de nuevo (ronda 13).
+(function () {
+  var datos = <?= json_encode($datosFormFallidos, JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+  document.getElementById('tituloModal').textContent = datos.id ? 'Editar producto' : 'Nuevo producto';
+  document.getElementById('f_id').value = datos.id || '';
+  document.getElementById('f_nombre').value = datos.nombre || '';
+  if (datos.categoria_id) { document.getElementById('f_categoria_id').value = datos.categoria_id; }
+  document.getElementById('f_tipo_venta').value = datos.tipo_venta || 'unidad';
+  document.getElementById('f_precio').value = datos.precio || '';
+  document.getElementById('f_stock_actual').value = datos.stock_actual || '';
+  document.getElementById('f_stock_minimo').value = datos.stock_minimo || '';
+  document.getElementById('f_activo').checked = !!datos.activo;
+  document.getElementById('f_precio_a_revisar').checked = !!datos.precio_a_revisar;
+  if (window.bootstrap) {
+    new bootstrap.Modal(document.getElementById('modalProducto')).show();
+  }
+})();
+<?php endif; ?>
 </script>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>

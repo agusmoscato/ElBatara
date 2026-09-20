@@ -10,18 +10,18 @@ $stmt = $pdo->prepare("SELECT * FROM caja_sesiones WHERE estado = 'abierta' ORDE
 $stmt->execute();
 $cajaAbierta = $stmt->fetch();
 
-// Productos con stock bajo (solo se muestra el aviso a admin)
+// Productos con stock bajo (solo se muestra el aviso a quien puede gestionar productos)
 $productosStockBajo = [];
-if (esAdmin()) {
+if (tienePermiso('gestionar_productos')) {
     $stmt = $pdo->query("SELECT nombre, stock_actual, stock_minimo, tipo_venta FROM productos
                           WHERE activo = 1 AND stock_actual <= stock_minimo
                           ORDER BY nombre");
     $productosStockBajo = $stmt->fetchAll();
 }
 
-// Resumen rápido del día (solo admin)
+// Resumen rápido del día (solo a quien puede ver reportes)
 $resumenHoy = null;
-if (esAdmin()) {
+if (tienePermiso('ver_reportes')) {
     $stmt = $pdo->query("SELECT COUNT(*) AS cantidad_pedidos, COALESCE(SUM(total), 0) AS total_vendido
                           FROM pedidos
                           WHERE estado = 'cerrado' AND DATE(cerrado_en) = CURDATE()");
@@ -40,24 +40,27 @@ require __DIR__ . '/includes/header.php';
     <a href="caja/abrir.php" class="btn btn-warning btn-sm">Abrir caja</a>
   </div>
 <?php else: ?>
-  <div class="alert alert-success">
-    Caja abierta desde <?= h(date('d/m/Y H:i', strtotime($cajaAbierta['abierta_en']))) ?>
-    con un monto inicial de <?= formatearMoneda((float)$cajaAbierta['monto_inicial']) ?>.
+  <div class="alert alert-success d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span>
+      Caja abierta desde <?= h(date('d/m/Y H:i', strtotime($cajaAbierta['abierta_en']))) ?>
+      con un monto inicial de <?= formatearMoneda((float)$cajaAbierta['monto_inicial']) ?>.
+    </span>
+    <a href="caja/cerrar.php" class="btn btn-outline-danger btn-sm">Cerrar caja</a>
   </div>
 <?php endif; ?>
 
-<?php if (esAdmin() && !empty($productosStockBajo)): ?>
+<?php if (tienePermiso('gestionar_productos') && !empty($productosStockBajo)): ?>
   <div class="alert alert-danger">
     <strong>Stock bajo:</strong>
     <?php foreach ($productosStockBajo as $p): ?>
-      <span class="badge bg-danger me-1">
+      <span class="badge bg-danger badge-alerta-fuerte me-1">
         <?= h($p['nombre']) ?> (<?= formatearCantidad((float)$p['stock_actual'], $p['tipo_venta']) ?>)
       </span>
     <?php endforeach; ?>
   </div>
 <?php endif; ?>
 
-<?php if (esAdmin() && $resumenHoy): ?>
+<?php if (tienePermiso('ver_reportes') && $resumenHoy): ?>
   <div class="row mb-4">
     <div class="col-6 col-md-3 mb-3">
       <div class="card text-center shadow-sm">
@@ -88,13 +91,17 @@ require __DIR__ . '/includes/header.php';
   <div class="col-6 col-md-3">
     <a href="stock/movimientos.php" class="btn btn-secondary w-100 py-4 btn-lg-touch">Ver stock</a>
   </div>
+  <?php if (tienePermiso('ver_caja')): ?>
   <div class="col-6 col-md-3">
     <a href="caja/historial.php" class="btn btn-secondary w-100 py-4 btn-lg-touch">Historial de caja</a>
   </div>
-  <?php if (esAdmin()): ?>
+  <?php endif; ?>
+  <?php if (tienePermiso('gestionar_productos')): ?>
   <div class="col-6 col-md-3">
     <a href="productos/listar.php" class="btn btn-secondary w-100 py-4 btn-lg-touch">Gestionar productos</a>
   </div>
+  <?php endif; ?>
+  <?php if (tienePermiso('ver_reportes')): ?>
   <div class="col-6 col-md-3">
     <a href="reportes/ingresos_egresos.php" class="btn btn-secondary w-100 py-4 btn-lg-touch">Ingresos y egresos</a>
   </div>

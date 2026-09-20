@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/paginacion.php';
-requerirLogin();
+requerirPermiso('ver_caja');
 
 $pdo = obtenerConexion();
 
@@ -30,7 +30,7 @@ $detallePorSesion = [];
 if (!empty($sesiones)) {
     $ids = array_column($sesiones, 'id');
     $marcadores = implode(',', array_fill(0, count($ids), '?'));
-    $stmtDetalle = $pdo->prepare("SELECT csm.caja_sesion_id, mp.nombre, csm.total_ventas, csm.total_egresos
+    $stmtDetalle = $pdo->prepare("SELECT csm.caja_sesion_id, mp.nombre, mp.es_efectivo, csm.total_ventas, csm.total_egresos
                                    FROM caja_sesion_medios csm
                                    JOIN medios_pago mp ON mp.id = csm.medio_pago_id
                                    WHERE csm.caja_sesion_id IN ($marcadores)
@@ -88,7 +88,7 @@ require __DIR__ . '/../../includes/header.php';
       $otrosMedios = 0;
       $detalleTexto = [];
       foreach ($detalle as $d) {
-          if (mb_strtolower($d['nombre']) !== 'efectivo') {
+          if (!$d['es_efectivo']) {
               $otrosMedios += (float)$d['total_ventas'];
           }
           if ((float)$d['total_ventas'] > 0 || (float)$d['total_egresos'] > 0) {
