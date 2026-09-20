@@ -22,9 +22,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($montoInicial === false || $montoInicial < 0) {
         $error = 'Ingresá un monto inicial válido.';
     } else {
-        $stmt = $pdo->prepare('INSERT INTO caja_sesiones (usuario_id, monto_inicial, estado) VALUES (?, ?, ?)');
-        $stmt->execute([$_SESSION['usuario_id'], $montoInicial, 'abierta']);
-        redirigir('dashboard.php');
+        try {
+            $stmt = $pdo->prepare('INSERT INTO caja_sesiones (usuario_id, monto_inicial, estado) VALUES (?, ?, ?)');
+            $stmt->execute([$_SESSION['usuario_id'], $montoInicial, 'abierta']);
+            redirigir('dashboard.php');
+        } catch (PDOException $e) {
+            // El índice único ux_caja_una_abierta (ver database.sql) rechaza el
+            // INSERT si otro dispositivo abrió una caja en el mismo instante,
+            // entre el chequeo de arriba y este INSERT (condición de carrera
+            // que el chequeo por sí solo no puede evitar).
+            if ($e->getCode() === '23000') {
+                $error = 'Ya se abrió una caja justo ahora desde otro dispositivo. Recargá la página.';
+            } else {
+                error_log('Error al abrir caja: ' . $e->getMessage());
+                $error = 'No se pudo abrir la caja. Intentá de nuevo.';
+            }
+        }
     }
 }
 

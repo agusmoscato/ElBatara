@@ -19,17 +19,35 @@ $precio = filter_var($_POST['precio'] ?? 0, FILTER_VALIDATE_FLOAT);
 $stockActual = filter_var($_POST['stock_actual'] ?? 0, FILTER_VALIDATE_FLOAT);
 $stockMinimo = filter_var($_POST['stock_minimo'] ?? 0, FILTER_VALIDATE_FLOAT);
 $activo = isset($_POST['activo']) ? 1 : 0;
+$precioARevisar = isset($_POST['precio_a_revisar']) ? 1 : 0;
 
-if ($nombre === '' || !$categoriaId || $precio === false || $precio < 0 || $stockActual === false || $stockMinimo === false) {
+if ($nombre === '') {
+    flashError('El nombre no puede estar vacío.');
+    redirigir('productos/listar.php');
+}
+if (!$categoriaId) {
+    flashError('Elegí una categoría válida.');
+    redirigir('productos/listar.php');
+}
+if ($precio === false || $precio < 0) {
+    flashError('El precio tiene que ser un número mayor o igual a cero.');
+    redirigir('productos/listar.php');
+}
+if ($stockActual === false || $stockActual < 0) {
+    flashError('El stock actual tiene que ser un número mayor o igual a cero.');
+    redirigir('productos/listar.php');
+}
+if ($stockMinimo === false || $stockMinimo < 0) {
+    flashError('El stock mínimo tiene que ser un número mayor o igual a cero.');
     redirigir('productos/listar.php');
 }
 
 if ($id) {
-    $stmt = $pdo->prepare('UPDATE productos SET categoria_id = ?, nombre = ?, tipo_venta = ?, precio = ?, stock_actual = ?, stock_minimo = ?, activo = ? WHERE id = ?');
-    $stmt->execute([$categoriaId, $nombre, $tipoVenta, $precio, $stockActual, $stockMinimo, $activo, $id]);
+    $stmt = $pdo->prepare('UPDATE productos SET categoria_id = ?, nombre = ?, tipo_venta = ?, precio = ?, stock_actual = ?, stock_minimo = ?, activo = ?, precio_a_revisar = ? WHERE id = ?');
+    $stmt->execute([$categoriaId, $nombre, $tipoVenta, $precio, $stockActual, $stockMinimo, $activo, $precioARevisar, $id]);
 } else {
-    $stmt = $pdo->prepare('INSERT INTO productos (categoria_id, nombre, tipo_venta, precio, stock_actual, stock_minimo, activo) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    $stmt->execute([$categoriaId, $nombre, $tipoVenta, $precio, $stockActual, $stockMinimo, $activo]);
+    $stmt = $pdo->prepare('INSERT INTO productos (categoria_id, nombre, tipo_venta, precio, stock_actual, stock_minimo, activo, precio_a_revisar) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$categoriaId, $nombre, $tipoVenta, $precio, $stockActual, $stockMinimo, $activo, $precioARevisar]);
 }
 
 redirigir('productos/listar.php');

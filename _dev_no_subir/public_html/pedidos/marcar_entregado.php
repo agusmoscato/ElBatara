@@ -31,4 +31,9 @@ $stmt = $pdo->prepare("UPDATE pedidos SET estado = 'entregado', entregado_en = N
                         WHERE id = ? AND estado IN ('abierto', 'en_preparacion')");
 $stmt->execute([$_SESSION['usuario_id'], $pedidoId]);
 
-echo json_encode(['ok' => true]);
+if ($stmt->rowCount() === 0) {
+    echo json_encode(['error' => 'El pedido ya no está pendiente de entrega. Recargá la página.']);
+    exit;
+}
+
+echo json_encode(['ok' => true, 'estado' => 'entregado']);

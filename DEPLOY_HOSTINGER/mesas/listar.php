@@ -25,7 +25,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'guard
     redirigir('mesas/listar.php');
 }
 
-$mesas = $pdo->query('SELECT * FROM mesas ORDER BY nombre')->fetchAll();
+$estadoFiltro = in_array($_GET['estado'] ?? '', ['libre', 'ocupada', 'cuenta_pedida'], true) ? $_GET['estado'] : '';
+
+if ($estadoFiltro) {
+    $stmt = $pdo->prepare('SELECT * FROM mesas WHERE estado = ? ORDER BY nombre');
+    $stmt->execute([$estadoFiltro]);
+    $mesas = $stmt->fetchAll();
+} else {
+    $mesas = $pdo->query('SELECT * FROM mesas ORDER BY nombre')->fetchAll();
+}
+
+// No se pagina: la cantidad de mesas de un local físico es chica (unas
+// pocas decenas como mucho), no tiene sentido la complejidad extra acá.
 
 $tituloPagina = 'Mesas';
 require __DIR__ . '/../includes/header.php';
@@ -60,9 +71,26 @@ require __DIR__ . '/../includes/header.php';
   </div>
 
   <div class="col-md-8">
+    <form method="get" action="listar.php" class="row g-2 align-items-end mb-3">
+      <div class="col-auto">
+        <label class="form-label">Estado</label>
+        <select name="estado" class="form-select">
+          <option value="">Todas</option>
+          <option value="libre" <?= $estadoFiltro === 'libre' ? 'selected' : '' ?>>Libre</option>
+          <option value="ocupada" <?= $estadoFiltro === 'ocupada' ? 'selected' : '' ?>>Ocupada</option>
+          <option value="cuenta_pedida" <?= $estadoFiltro === 'cuenta_pedida' ? 'selected' : '' ?>>Cuenta pedida</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+      </div>
+    </form>
     <table class="table table-striped bg-white shadow-sm">
       <thead><tr><th>Nombre</th><th>Capacidad</th><th>Estado actual</th><th>Activa</th><th></th></tr></thead>
       <tbody>
+        <?php if (empty($mesas)): ?>
+          <tr><td colspan="5" class="text-muted">Sin mesas que coincidan con el filtro.</td></tr>
+        <?php endif; ?>
         <?php foreach ($mesas as $m): $formId = 'form_mesa_' . (int)$m['id']; ?>
         <tr>
             <td><input form="<?= $formId ?>" type="text" name="nombre" value="<?= h($m['nombre']) ?>" class="form-control form-control-sm"></td>

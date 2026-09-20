@@ -85,7 +85,7 @@ require __DIR__ . '/../includes/header.php';
   </tbody>
 </table>
 
-<script src="<?= $base ?>assets/js/chart.umd.min.js"></script>
+<script src="<?= $base ?>assets/vendor/chartjs-4.4.4/chart.umd.min.js"></script>
 <script>
 const etiquetas = <?= json_encode(array_map(fn($f) => date('d/m', strtotime($f['fecha'])), $filas)) ?>;
 const totales = <?= json_encode(array_map(fn($f) => (float)$f['total_vendido'], $filas)) ?>;

@@ -42,8 +42,7 @@ if (!$item) {
     exit;
 }
 
-$pdo->beginTransaction();
-try {
+$resultado = ejecutarTransaccion($pdo, function (PDO $pdo) use ($item, $pedidoId, $itemId) {
     // Devolvemos el stock que se había descontado al agregar el producto.
     $pdo->prepare('UPDATE productos SET stock_actual = stock_actual + ? WHERE id = ?')
         ->execute([$item['cantidad'], $item['producto_id']]);
@@ -54,12 +53,10 @@ try {
     $pdo->prepare('DELETE FROM pedido_items WHERE id = ?')->execute([$itemId]);
 
     recalcularTotalPedido($pdo, $pedidoId);
+}, 'quitar item', 'No se pudo quitar el producto');
 
-    $pdo->commit();
-} catch (Exception $e) {
-    $pdo->rollBack();
-    error_log('Error al quitar item: ' . $e->getMessage());
-    echo json_encode(['error' => 'No se pudo quitar el producto']);
+if (!$resultado['ok']) {
+    echo json_encode(['error' => $resultado['error']]);
     exit;
 }
 

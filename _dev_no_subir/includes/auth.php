@@ -24,24 +24,41 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+/** Intentos fallidos consecutivos que disparan el bloqueo temporal. */
+const LOGIN_LIMITE_INTENTOS = 5;
+/** Minutos que dura el bloqueo una vez alcanzado el límite. */
+const LOGIN_MINUTOS_BLOQUEO = 5;
+
 /**
  * Intenta iniciar sesión con usuario y contraseña.
- * Devuelve true si el login fue exitoso, false si no.
+ * Devuelve true si el login fue exitoso, o un mensaje de error (string)
+ * si no — nunca details específicos de por qué (usuario inexistente vs.
+ * contraseña incorrecta se tratan igual, salvo el caso de bloqueo, para no
+ * ayudar a un atacante a confirmar qué usuarios existen).
  */
-function iniciarSesion(string $usuario, string $password): bool
+function iniciarSesion(string $usuario, string $password)
 {
     $pdo = obtenerConexion();
-    $stmt = $pdo->prepare('SELECT id, nombre, usuario, password_hash, rol, activo FROM usuarios WHERE usuario = ? LIMIT 1');
+    $stmt = $pdo->prepare('SELECT id, nombre, usuario, password_hash, rol, activo, intentos_fallidos, bloqueado_hasta FROM usuarios WHERE usuario = ? LIMIT 1');
     $stmt->execute([$usuario]);
     $fila = $stmt->fetch();
 
     if (!$fila || !$fila['activo']) {
-        return false;
+        return 'Usuario o contraseña incorrectos.';
+    }
+
+    if ($fila['bloqueado_hasta'] !== null && strtotime($fila['bloqueado_hasta']) > time()) {
+        $minutosRestantes = (int)ceil((strtotime($fila['bloqueado_hasta']) - time()) / 60);
+        return "Demasiados intentos fallidos. Probá de nuevo en $minutosRestantes minuto(s).";
     }
 
     if (!password_verify($password, $fila['password_hash'])) {
-        return false;
+        registrarIntentoFallido($pdo, (int)$fila['id'], (int)$fila['intentos_fallidos']);
+        return 'Usuario o contraseña incorrectos.';
     }
+
+    $pdo->prepare('UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id = ?')
+        ->execute([$fila['id']]);
 
     // Regeneramos el ID de sesión para evitar fijación de sesión (session fixation).
     session_regenerate_id(true);
@@ -51,6 +68,22 @@ function iniciarSesion(string $usuario, string $password): bool
     $_SESSION['usuario_rol']    = $fila['rol'];
 
     return true;
+}
+
+/**
+ * Suma un intento fallido al usuario y, si llega al límite, lo bloquea
+ * temporalmente (ver LOGIN_LIMITE_INTENTOS/LOGIN_MINUTOS_BLOQUEO arriba).
+ */
+function registrarIntentoFallido(PDO $pdo, int $usuarioId, int $intentosPrevios): void
+{
+    $intentos = $intentosPrevios + 1;
+    if ($intentos >= LOGIN_LIMITE_INTENTOS) {
+        $pdo->prepare('UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id = ?')
+            ->execute([LOGIN_MINUTOS_BLOQUEO, $usuarioId]);
+    } else {
+        $pdo->prepare('UPDATE usuarios SET intentos_fallidos = ? WHERE id = ?')
+            ->execute([$intentos, $usuarioId]);
+    }
 }
 
 function cerrarSesion(): void

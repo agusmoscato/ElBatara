@@ -101,43 +101,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $diferencia = round($montoFinal - $efectivoEsperado, 2);
 
-        try {
-            ejecutarTransaccion($pdo, function (PDO $pdo) use ($caja, $montoFinal, $totalEfectivoVentas, $totalEfectivoEgresos, $diferencia, $nota, $desglose, $ventasPorMedio) {
-                $pdo->prepare("UPDATE caja_sesiones SET
-                                estado = 'cerrada',
-                                monto_final_declarado = ?,
-                                total_efectivo = ?,
-                                total_egresos_efectivo = ?,
-                                diferencia = ?,
-                                nota = ?,
-                                cerrada_en = NOW()
-                                WHERE id = ?")
-                    ->execute([
-                        $montoFinal,
-                        $totalEfectivoVentas,
-                        $totalEfectivoEgresos,
-                        $diferencia,
-                        $nota !== '' ? $nota : null,
-                        $caja['id'],
-                    ]);
+        $resultado = ejecutarTransaccion($pdo, function (PDO $pdo) use ($caja, $montoFinal, $totalEfectivoVentas, $totalEfectivoEgresos, $diferencia, $nota, $desglose, $ventasPorMedio) {
+            $pdo->prepare("UPDATE caja_sesiones SET
+                            estado = 'cerrada',
+                            monto_final_declarado = ?,
+                            total_efectivo = ?,
+                            total_egresos_efectivo = ?,
+                            diferencia = ?,
+                            nota = ?,
+                            cerrada_en = NOW()
+                            WHERE id = ?")
+                ->execute([
+                    $montoFinal,
+                    $totalEfectivoVentas,
+                    $totalEfectivoEgresos,
+                    $diferencia,
+                    $nota !== '' ? $nota : null,
+                    $caja['id'],
+                ]);
 
-                $stmtDetalle = $pdo->prepare('INSERT INTO caja_sesion_medios (caja_sesion_id, medio_pago_id, total_ventas, total_egresos) VALUES (?, ?, ?, ?)');
-                foreach ($ventasPorMedio as $i => $fila) {
-                    $medioId = (int)$fila['id'];
-                    $ventas = (float)$fila['total_ventas'];
-                    $egresos = $desglose[$i]['egresos'];
-                    if ($ventas == 0 && $egresos == 0) {
-                        continue;
-                    }
-                    $stmtDetalle->execute([$caja['id'], $medioId, $ventas, $egresos]);
+            $stmtDetalle = $pdo->prepare('INSERT INTO caja_sesion_medios (caja_sesion_id, medio_pago_id, total_ventas, total_egresos) VALUES (?, ?, ?, ?)');
+            foreach ($ventasPorMedio as $i => $fila) {
+                $medioId = (int)$fila['id'];
+                $ventas = (float)$fila['total_ventas'];
+                $egresos = $desglose[$i]['egresos'];
+                if ($ventas == 0 && $egresos == 0) {
+                    continue;
                 }
-            });
+                $stmtDetalle->execute([$caja['id'], $medioId, $ventas, $egresos]);
+            }
+        }, 'cerrar caja', 'No se pudo cerrar la caja. Intentá nuevamente.');
 
+        if ($resultado['ok']) {
             redirigir('caja/historial.php');
-        } catch (Exception $e) {
-            error_log('Error al cerrar caja: ' . $e->getMessage());
-            $error = 'No se pudo cerrar la caja. Intentá nuevamente.';
         }
+        $error = $resultado['error'];
     }
 }
 

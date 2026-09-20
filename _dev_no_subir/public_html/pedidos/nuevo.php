@@ -70,16 +70,32 @@ $productos = $pdo->query('SELECT * FROM productos WHERE activo = 1 ORDER BY nomb
 
 // Productos más vendidos en los últimos 30 días, para accesos rápidos
 // arriba de todo (evita scrollear toda la carta para lo que más se pide).
-$masVendidos = $pdo->query("SELECT p.id, p.nombre, p.tipo_venta, p.precio, SUM(pi.cantidad) AS total_vendido
-                             FROM pedido_items pi
-                             JOIN pedidos ped ON ped.id = pi.pedido_id
-                             JOIN productos p ON p.id = pi.producto_id
-                             WHERE ped.estado = 'cerrado'
-                               AND ped.cerrado_en >= (NOW() - INTERVAL 30 DAY)
-                               AND p.activo = 1
-                             GROUP BY p.id, p.nombre, p.tipo_venta, p.precio
-                             ORDER BY total_vendido DESC
-                             LIMIT 8")->fetchAll();
+// Es una agregación no trivial (JOIN de 3 tablas) que antes se recalculaba
+// en CADA carga de esta pantalla, que es la que más se abre y recarga de
+// todo el sistema. El ranking de "más vendidos" no necesita ser exacto al
+// segundo, así que se cachea en la sesión del usuario por unos minutos: es
+// la opción más simple que no agrega infraestructura nueva (nada de tablas
+// materializadas, cron ni caché en archivo/Redis, que no tendrían sentido
+// en un hosting compartido sin acceso a un proceso en background).
+$ttlCacheMasVendidos = 180; // segundos
+if (
+    !empty($_SESSION['cache_mas_vendidos']) &&
+    (time() - $_SESSION['cache_mas_vendidos']['creado_en']) < $ttlCacheMasVendidos
+) {
+    $masVendidos = $_SESSION['cache_mas_vendidos']['datos'];
+} else {
+    $masVendidos = $pdo->query("SELECT p.id, p.nombre, p.tipo_venta, p.precio, SUM(pi.cantidad) AS total_vendido
+                                 FROM pedido_items pi
+                                 JOIN pedidos ped ON ped.id = pi.pedido_id
+                                 JOIN productos p ON p.id = pi.producto_id
+                                 WHERE ped.estado = 'cerrado'
+                                   AND ped.cerrado_en >= (NOW() - INTERVAL 30 DAY)
+                                   AND p.activo = 1
+                                 GROUP BY p.id, p.nombre, p.tipo_venta, p.precio
+                                 ORDER BY total_vendido DESC
+                                 LIMIT 8")->fetchAll();
+    $_SESSION['cache_mas_vendidos'] = ['datos' => $masVendidos, 'creado_en' => time()];
+}
 
 // Items actuales del pedido
 $stmt = $pdo->prepare("SELECT pi.*, p.nombre AS producto_nombre, p.tipo_venta
@@ -102,15 +118,7 @@ require __DIR__ . '/../../includes/header.php';
     </span>
   </h2>
   <div class="d-flex flex-wrap gap-2">
-    <?php if ($pedido['estado'] === 'abierto'): ?>
-      <button class="btn btn-info btn-lg-touch" onclick="enviarCocina()">Enviar a cocina</button>
-    <?php elseif ($pedido['estado'] === 'en_preparacion'): ?>
-      <button class="btn btn-info btn-lg-touch" onclick="marcarEntregado()" title="Tocar cuando se lleve el pedido a la mesa">
-        En preparación (tocar al entregar)
-      </button>
-    <?php elseif ($pedido['estado'] === 'entregado'): ?>
-      <span class="badge bg-success align-self-center fs-6">✓ Entregado</span>
-    <?php endif; ?>
+    <span id="botonEstadoPedido"><?= renderBotonEstadoPedido($pedido['estado']) ?></span>
     <a href="cerrar.php?pedido_id=<?= $pedidoId ?>" class="btn btn-success btn-lg-touch">Cobrar / Cerrar</a>
     <button class="btn btn-outline-danger btn-lg-touch" onclick="cancelarPedido()">Cancelar pedido</button>
     <a href="../mesas/salon.php" class="btn btn-outline-secondary btn-lg-touch">Volver al salón</a>
@@ -408,7 +416,9 @@ function enviarCocina() {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `pedido_id=${PEDIDO_ID}&csrf_token=${encodeURIComponent(CSRF_TOKEN)}`
   })
-  .then(() => location.reload());
+  .then(r => r.json())
+  .then(actualizarBotonEstadoPedido)
+  .catch(() => alert('No se pudo enviar el pedido a cocina.'));
 }
 
 function marcarEntregado() {
@@ -417,7 +427,25 @@ function marcarEntregado() {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `pedido_id=${PEDIDO_ID}&csrf_token=${encodeURIComponent(CSRF_TOKEN)}`
   })
-  .then(() => location.reload());
+  .then(r => r.json())
+  .then(actualizarBotonEstadoPedido)
+  .catch(() => alert('No se pudo marcar el pedido como entregado.'));
+}
+
+// Reproduce en JS el mismo HTML que renderBotonEstadoPedido() en
+// includes/functions.php, para no recargar toda la página (y perder la
+// posición de scroll) solo por cambiar este botón.
+function actualizarBotonEstadoPedido(data) {
+  if (data.error) {
+    alert(data.error);
+    return;
+  }
+  const cont = document.getElementById('botonEstadoPedido');
+  if (data.estado === 'en_preparacion') {
+    cont.innerHTML = '<button class="btn btn-info btn-lg-touch" onclick="marcarEntregado()" title="Tocar cuando se lleve el pedido a la mesa">En preparación (tocar al entregar)</button>';
+  } else if (data.estado === 'entregado') {
+    cont.innerHTML = '<span class="badge bg-success align-self-center fs-6">✓ Entregado</span>';
+  }
 }
 
 function actualizarPedido(data) {

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/paginacion.php';
 requerirLogin();
 
 $pdo = obtenerConexion();
@@ -16,21 +17,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nota = trim($_POST['nota'] ?? '');
 
     if ($productoId && $cantidad !== false && $cantidad > 0) {
-        $pdo->beginTransaction();
-        try {
+        $resultado = ejecutarTransaccion($pdo, function (PDO $pdo) use ($productoId, $cantidad, $nota) {
             $pdo->prepare('UPDATE productos SET stock_actual = stock_actual + ? WHERE id = ?')
                 ->execute([$cantidad, $productoId]);
 
             $pdo->prepare('INSERT INTO movimientos_stock (producto_id, tipo, cantidad, usuario_id, nota) VALUES (?, ?, ?, ?, ?)')
                 ->execute([$productoId, 'ingreso', $cantidad, $_SESSION['usuario_id'], $nota !== '' ? $nota : null]);
+        }, 'reponer stock', 'No se pudo registrar el ingreso.');
 
-            $pdo->commit();
+        if ($resultado['ok']) {
             redirigir('stock/reponer.php?producto_id=' . $productoId);
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            error_log('Error al reponer stock: ' . $e->getMessage());
-            $mensaje = 'No se pudo registrar el ingreso.';
         }
+        $mensaje = $resultado['error'];
     } else {
         $mensaje = 'Completá el producto y una cantidad válida.';
     }
@@ -41,18 +39,25 @@ $productos = $pdo->query('SELECT * FROM productos WHERE activo = 1 ORDER BY nomb
 // Historial del producto seleccionado (ventas + reposiciones + ajustes)
 $productoSeleccionado = null;
 $historial = [];
+$totalHistorial = 0;
+$paginaHistorial = obtenerPaginaActual();
 if ($productoSeleccionadoId) {
     $stmt = $pdo->prepare('SELECT * FROM productos WHERE id = ?');
     $stmt->execute([$productoSeleccionadoId]);
     $productoSeleccionado = $stmt->fetch();
 
     if ($productoSeleccionado) {
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM movimientos_stock WHERE producto_id = ?');
+        $stmt->execute([$productoSeleccionadoId]);
+        $totalHistorial = (int)$stmt->fetchColumn();
+
+        $offset = calcularOffset($paginaHistorial);
         $stmt = $pdo->prepare("SELECT m.*, u.nombre AS usuario_nombre
                                 FROM movimientos_stock m
                                 JOIN usuarios u ON u.id = m.usuario_id
                                 WHERE m.producto_id = ?
                                 ORDER BY m.creado_en DESC
-                                LIMIT 50");
+                                LIMIT $offset, " . FILAS_POR_PAGINA);
         $stmt->execute([$productoSeleccionadoId]);
         $historial = $stmt->fetchAll();
     }
@@ -111,7 +116,7 @@ require __DIR__ . '/../../includes/header.php';
             &nbsp;|&nbsp;
             Mínimo: <?= formatearCantidad((float)$productoSeleccionado['stock_minimo'], $productoSeleccionado['tipo_venta']) ?>
           </p>
-          <h6>Historial de movimientos (últimos 50)</h6>
+          <h6>Historial de movimientos</h6>
           <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
             <table class="table table-sm table-striped">
               <thead><tr><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Usuario</th></tr></thead>
@@ -134,6 +139,7 @@ require __DIR__ . '/../../includes/header.php';
               </tbody>
             </table>
           </div>
+          <?= renderPaginacion($paginaHistorial, $totalHistorial) ?>
         </div>
       </div>
     <?php else: ?>

@@ -35,28 +35,28 @@ if (!$pedido) {
     exit;
 }
 
-$stmt = $pdo->prepare('SELECT * FROM productos WHERE id = ? AND activo = 1');
-$stmt->execute([$productoId]);
-$producto = $stmt->fetch();
-if (!$producto) {
-    echo json_encode(['error' => 'Producto no disponible']);
-    exit;
-}
+$resultado = ejecutarTransaccion($pdo, function (PDO $pdo) use ($productoId, $pedidoId, $cantidad) {
+    // SELECT ... FOR UPDATE bloquea la fila del producto hasta el commit,
+    // para que dos ventas simultáneas del mismo producto no lean el mismo
+    // stock disponible y lo dejen en negativo (condición de carrera).
+    $stmt = $pdo->prepare('SELECT * FROM productos WHERE id = ? AND activo = 1 FOR UPDATE');
+    $stmt->execute([$productoId]);
+    $producto = $stmt->fetch();
+    if (!$producto) {
+        throw new ValidacionException('Producto no disponible');
+    }
 
-// Los productos por unidad se cargan en cantidades enteras.
-if ($producto['tipo_venta'] === 'unidad') {
-    $cantidad = (float)round($cantidad);
-}
+    // Los productos por unidad se cargan en cantidades enteras.
+    if ($producto['tipo_venta'] === 'unidad') {
+        $cantidad = (float)round($cantidad);
+    }
 
-if ($cantidad > (float)$producto['stock_actual']) {
-    echo json_encode(['error' => 'Stock insuficiente. Disponible: ' . formatearCantidad((float)$producto['stock_actual'], $producto['tipo_venta'])]);
-    exit;
-}
+    if ($cantidad > (float)$producto['stock_actual']) {
+        throw new ValidacionException('Stock insuficiente. Disponible: ' . formatearCantidad((float)$producto['stock_actual'], $producto['tipo_venta']));
+    }
 
-$subtotal = round($cantidad * (float)$producto['precio'], 2);
+    $subtotal = round($cantidad * (float)$producto['precio'], 2);
 
-$pdo->beginTransaction();
-try {
     $stmt = $pdo->prepare('INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio_unitario, subtotal) VALUES (?, ?, ?, ?, ?)');
     $stmt->execute([$pedidoId, $productoId, $cantidad, $producto['precio'], $subtotal]);
 
@@ -66,12 +66,10 @@ try {
         ->execute([$productoId, 'venta', -$cantidad, $pedidoId, $_SESSION['usuario_id'], null]);
 
     recalcularTotalPedido($pdo, $pedidoId);
+}, 'agregar item', 'No se pudo agregar el producto');
 
-    $pdo->commit();
-} catch (Exception $e) {
-    $pdo->rollBack();
-    error_log('Error al agregar item: ' . $e->getMessage());
-    echo json_encode(['error' => 'No se pudo agregar el producto']);
+if (!$resultado['ok']) {
+    echo json_encode(['error' => $resultado['error']]);
     exit;
 }
 

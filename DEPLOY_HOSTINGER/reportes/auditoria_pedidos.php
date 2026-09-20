@@ -1,28 +1,41 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/paginacion.php';
 requerirAdmin();
 
 $pdo = obtenerConexion();
 
-$desde = $_GET['desde'] ?? date('Y-m-d', strtotime('-6 days'));
-$hasta = $_GET['hasta'] ?? date('Y-m-d');
-
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) { $desde = date('Y-m-d', strtotime('-6 days')); }
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) { $hasta = date('Y-m-d'); }
-
+$desde = obtenerFechaGet('desde', date('Y-m-d', strtotime('-6 days')));
+$hasta = obtenerFechaGet('hasta', date('Y-m-d'));
+$usuarioId = intPositivoONull($_GET['usuario_id'] ?? null);
+$estadoFiltro = in_array($_GET['estado'] ?? '', ['cerrado', 'cancelado'], true) ? $_GET['estado'] : '';
 $canal = $_GET['canal'] ?? '';
 if (!in_array($canal, ['mostrador', 'mesa'], true)) { $canal = ''; }
 
-$condiciones = ["p.estado IN ('cerrado', 'cancelado')", 'DATE(COALESCE(p.cerrado_en, p.cancelado_en)) BETWEEN ? AND ?'];
-$parametros = [$desde, $hasta];
-if ($canal !== '') {
-    $condiciones[] = 'p.canal = ?';
-    $parametros[] = $canal;
+$where = ["p.estado IN ('cerrado', 'cancelado')", 'DATE(COALESCE(p.cerrado_en, p.cancelado_en)) BETWEEN ? AND ?'];
+$params = [$desde, $hasta];
+if ($estadoFiltro) {
+    $where = ['p.estado = ?', 'DATE(COALESCE(p.cerrado_en, p.cancelado_en)) BETWEEN ? AND ?'];
+    $params = [$estadoFiltro, $desde, $hasta];
 }
-$whereSql = implode(' AND ', $condiciones);
+if ($usuarioId) {
+    $where[] = '(p.usuario_id = ? OR p.entregado_por_id = ? OR p.cerrado_por_id = ? OR p.cancelado_por_id = ?)';
+    array_push($params, $usuarioId, $usuarioId, $usuarioId, $usuarioId);
+}
+if ($canal !== '') {
+    $where[] = 'p.canal = ?';
+    $params[] = $canal;
+}
+$whereSql = implode(' AND ', $where);
 
-$stmt = $pdo->prepare("SELECT p.id, p.estado, p.total, p.canal, mp.nombre AS medio_pago_nombre, p.creado_en,
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM pedidos p WHERE $whereSql");
+$stmt->execute($params);
+$totalFilas = (int)$stmt->fetchColumn();
+
+$pagina = obtenerPaginaActual();
+$offset = calcularOffset($pagina);
+$sqlListado = "SELECT p.id, p.estado, p.total, p.canal, mp.nombre AS medio_pago_nombre, p.creado_en,
                                p.entregado_en, p.cerrado_en, p.cancelado_en,
                                m.nombre AS mesa_nombre,
                                u.nombre AS mozo_nombre,
@@ -37,11 +50,18 @@ $stmt = $pdo->prepare("SELECT p.id, p.estado, p.total, p.canal, mp.nombre AS med
                         LEFT JOIN usuarios uc ON uc.id = p.cerrado_por_id
                         LEFT JOIN usuarios ua ON ua.id = p.cancelado_por_id
                         WHERE $whereSql
-                        ORDER BY COALESCE(p.cerrado_en, p.cancelado_en) DESC");
-$stmt->execute($parametros);
+                        ORDER BY COALESCE(p.cerrado_en, p.cancelado_en) DESC";
+
+$stmt = $pdo->prepare($sqlListado . " LIMIT $offset, " . FILAS_POR_PAGINA);
+$stmt->execute($params);
 $pedidos = $stmt->fetchAll();
 
+$usuarios = $pdo->query('SELECT id, nombre FROM usuarios ORDER BY nombre')->fetchAll();
+
 if (($_GET['exportar'] ?? '') === 'csv') {
+    $stmtExport = $pdo->prepare($sqlListado);
+    $stmtExport->execute($params);
+    $pedidosExport = $stmtExport->fetchAll();
     $filasCsv = array_map(fn($p) => [
         $p['id'],
         $p['mesa_nombre'] ?? '-',
@@ -56,7 +76,7 @@ if (($_GET['exportar'] ?? '') === 'csv') {
         $p['cerrado_en'] ? date('d/m/Y H:i', strtotime($p['cerrado_en'])) : '-',
         $p['cancelado_por_nombre'] ?? '-',
         $p['cancelado_en'] ? date('d/m/Y H:i', strtotime($p['cancelado_en'])) : '-',
-    ], $pedidos);
+    ], $pedidosExport);
     exportarCsv('auditoria_pedidos_' . $desde . '_a_' . $hasta . '.csv',
         ['#', 'Mesa', 'Canal', 'Mozo', 'Total', 'Medio de pago', 'Estado', 'Entregado por', 'Fecha entrega', 'Cobrado por', 'Fecha cobro', 'Cancelado por', 'Fecha cancelación'],
         $filasCsv);
@@ -92,6 +112,23 @@ require __DIR__ . '/../includes/header.php';
     </select>
   </div>
   <div class="col-auto">
+    <label class="form-label">Usuario</label>
+    <select name="usuario_id" class="form-select">
+      <option value="">Todos</option>
+      <?php foreach ($usuarios as $u): ?>
+        <option value="<?= (int)$u['id'] ?>" <?= $usuarioId === (int)$u['id'] ? 'selected' : '' ?>><?= h($u['nombre']) ?></option>
+      <?php endforeach; ?>
+    </select>
+  </div>
+  <div class="col-auto">
+    <label class="form-label">Estado</label>
+    <select name="estado" class="form-select">
+      <option value="">Todos</option>
+      <option value="cerrado" <?= $estadoFiltro === 'cerrado' ? 'selected' : '' ?>>Cobrado</option>
+      <option value="cancelado" <?= $estadoFiltro === 'cancelado' ? 'selected' : '' ?>>Cancelado</option>
+    </select>
+  </div>
+  <div class="col-auto">
     <button type="submit" class="btn btn-primary">Filtrar</button>
   </div>
 </form>
@@ -107,6 +144,9 @@ require __DIR__ . '/../includes/header.php';
     </tr>
   </thead>
   <tbody>
+    <?php if (empty($pedidos)): ?>
+      <tr><td colspan="13" class="text-muted">Sin pedidos que coincidan con el filtro.</td></tr>
+    <?php endif; ?>
     <?php foreach ($pedidos as $p): ?>
     <tr>
       <td><?= (int)$p['id'] ?></td>
@@ -131,5 +171,6 @@ require __DIR__ . '/../includes/header.php';
   </tbody>
 </table>
 </div>
+<?= renderPaginacion($pagina, $totalFilas) ?>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>
