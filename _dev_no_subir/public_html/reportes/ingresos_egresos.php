@@ -202,7 +202,7 @@ require __DIR__ . '/../../includes/header.php';
   </div>
 </div>
 
-<script src="<?= $base ?>assets/js/chart.umd.min.js"></script>
+<script src="<?= $base ?>assets/vendor/chartjs-4.4.4/chart.umd.min.js"></script>
 <script>
 const PALETA_GRAFICOS = ['#8B2E2E', '#c9a24b', '#4f7a6b', '#7a6a58', '#b85c5c', '#3f6b8a', '#a8763e', '#6f4e7c'];
 
