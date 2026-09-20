@@ -85,7 +85,7 @@ require __DIR__ . '/../../includes/header.php';
   </tbody>
 </table>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="<?= $base ?>assets/js/chart.umd.min.js"></script>
 <script>
 const etiquetas = <?= json_encode(array_map(fn($f) => date('d/m', strtotime($f['fecha'])), $filas)) ?>;
 const totales = <?= json_encode(array_map(fn($f) => (float)$f['total_vendido'], $filas)) ?>;
@@ -94,7 +94,7 @@ new Chart(document.getElementById('graficoVentas'), {
   type: 'bar',
   data: {
     labels: etiquetas,
-    datasets: [{ label: 'Total vendido', data: totales, backgroundColor: '#0d6efd' }]
+    datasets: [{ label: 'Total vendido', data: totales, backgroundColor: '#8B2E2E' }]
   },
   options: { responsive: true, plugins: { legend: { display: false } } }
 });

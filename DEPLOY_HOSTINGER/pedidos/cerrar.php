@@ -17,37 +17,40 @@ if (!$pedido) {
     redirigir('mesas/salon.php');
 }
 
+$mediosPago = $pdo->query('SELECT * FROM medios_pago WHERE activo = 1 ORDER BY nombre')->fetchAll();
+
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     validarTokenCsrf();
 
-    $medioPago = $_POST['medio_pago'] ?? '';
-    $mediosValidos = ['efectivo', 'tarjeta', 'transferencia'];
+    $medioPagoId = intPositivoONull($_POST['medio_pago_id'] ?? null);
 
     // El pedido tiene que tener al menos un producto para poder cobrarse.
     $stmt = $pdo->prepare('SELECT COUNT(*) FROM pedido_items WHERE pedido_id = ?');
     $stmt->execute([$pedidoId]);
     $cantidadItems = (int)$stmt->fetchColumn();
 
-    if (!in_array($medioPago, $mediosValidos, true)) {
+    $stmtMp = $pdo->prepare('SELECT id FROM medios_pago WHERE id = ? AND activo = 1');
+    $stmtMp->execute([$medioPagoId]);
+    $medioPagoValido = $medioPagoId && $stmtMp->fetch();
+
+    if (!$medioPagoValido) {
         $error = 'Seleccioná un medio de pago válido.';
     } elseif ($cantidadItems === 0) {
         $error = 'El pedido no tiene productos cargados.';
     } else {
-        $pdo->beginTransaction();
         try {
-            $pdo->prepare("UPDATE pedidos SET estado = 'cerrado', medio_pago = ?, cerrado_en = NOW(), cerrado_por_id = ? WHERE id = ?")
-                ->execute([$medioPago, $_SESSION['usuario_id'], $pedidoId]);
+            ejecutarTransaccion($pdo, function (PDO $pdo) use ($pedido, $pedidoId, $medioPagoId) {
+                $pdo->prepare("UPDATE pedidos SET estado = 'cerrado', medio_pago_id = ?, cerrado_en = NOW(), cerrado_por_id = ? WHERE id = ?")
+                    ->execute([$medioPagoId, $_SESSION['usuario_id'], $pedidoId]);
 
-            if ($pedido['mesa_id']) {
-                $pdo->prepare("UPDATE mesas SET estado = 'libre' WHERE id = ?")->execute([$pedido['mesa_id']]);
-            }
-
-            $pdo->commit();
+                if ($pedido['mesa_id']) {
+                    $pdo->prepare("UPDATE mesas SET estado = 'libre' WHERE id = ?")->execute([$pedido['mesa_id']]);
+                }
+            });
             redirigir('pedidos/ticket.php?pedido_id=' . $pedidoId);
         } catch (Exception $e) {
-            $pdo->rollBack();
             error_log('Error al cerrar pedido: ' . $e->getMessage());
             $error = 'No se pudo cerrar el pedido. Intentá nuevamente.';
         }
@@ -105,18 +108,15 @@ require __DIR__ . '/../includes/header.php';
         <form method="post" action="cerrar.php?pedido_id=<?= $pedidoId ?>">
           <input type="hidden" name="csrf_token" value="<?= h(generarTokenCsrf()) ?>">
           <div class="mb-3">
+            <?php foreach ($mediosPago as $i => $mp): ?>
             <div class="form-check">
-              <input class="form-check-input" type="radio" name="medio_pago" value="efectivo" id="mp_efectivo" checked>
-              <label class="form-check-label" for="mp_efectivo">Efectivo</label>
+              <input class="form-check-input" type="radio" name="medio_pago_id" value="<?= (int)$mp['id'] ?>" id="mp_<?= (int)$mp['id'] ?>" <?= $i === 0 ? 'checked' : '' ?>>
+              <label class="form-check-label" for="mp_<?= (int)$mp['id'] ?>"><?= h($mp['nombre']) ?></label>
             </div>
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="medio_pago" value="tarjeta" id="mp_tarjeta">
-              <label class="form-check-label" for="mp_tarjeta">Tarjeta</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="medio_pago" value="transferencia" id="mp_transferencia">
-              <label class="form-check-label" for="mp_transferencia">Transferencia / QR</label>
-            </div>
+            <?php endforeach; ?>
+            <?php if (empty($mediosPago)): ?>
+              <div class="text-danger">No hay medios de pago activos. Activá al menos uno desde Medios de pago.</div>
+            <?php endif; ?>
           </div>
           <button type="submit" class="btn btn-success btn-lg-touch w-100">Confirmar cobro</button>
         </form>

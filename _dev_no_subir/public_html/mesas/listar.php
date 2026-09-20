@@ -31,7 +31,7 @@ $tituloPagina = 'Mesas';
 require __DIR__ . '/../../includes/header.php';
 ?>
 
-<h2 class="mb-3">Mesas (ABM)</h2>
+<h2 class="mb-3">Mesas</h2>
 
 <div class="row">
   <div class="col-md-4 mb-4">
@@ -68,7 +68,11 @@ require __DIR__ . '/../../includes/header.php';
             <td><input form="<?= $formId ?>" type="text" name="nombre" value="<?= h($m['nombre']) ?>" class="form-control form-control-sm"></td>
             <td><input form="<?= $formId ?>" type="number" name="capacidad" value="<?= (int)$m['capacidad'] ?>" class="form-control form-control-sm" style="width:80px"></td>
             <td><span class="badge bg-info text-dark"><?= h($m['estado']) ?></span></td>
-            <td><input form="<?= $formId ?>" type="checkbox" name="activo" class="form-check-input" <?= $m['activo'] ? 'checked' : '' ?>></td>
+            <td>
+              <div class="form-check form-switch">
+                <input form="<?= $formId ?>" type="checkbox" name="activo" class="form-check-input" <?= $m['activo'] ? 'checked' : '' ?>>
+              </div>
+            </td>
             <td>
               <form id="<?= $formId ?>" method="post" action="listar.php" class="d-inline">
                 <input type="hidden" name="accion" value="guardar">

@@ -83,6 +83,9 @@ require __DIR__ . '/../includes/header.php';
     <a href="mesas/salon.php" class="btn btn-primary w-100 py-4 btn-lg-touch">Ir al salón</a>
   </div>
   <div class="col-6 col-md-3">
+    <a href="egresos/nuevo.php" class="btn btn-secondary w-100 py-4 btn-lg-touch">Cargar egreso</a>
+  </div>
+  <div class="col-6 col-md-3">
     <a href="stock/movimientos.php" class="btn btn-secondary w-100 py-4 btn-lg-touch">Ver stock</a>
   </div>
   <div class="col-6 col-md-3">
@@ -91,6 +94,9 @@ require __DIR__ . '/../includes/header.php';
   <?php if (esAdmin()): ?>
   <div class="col-6 col-md-3">
     <a href="productos/listar.php" class="btn btn-secondary w-100 py-4 btn-lg-touch">Gestionar productos</a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="reportes/ingresos_egresos.php" class="btn btn-secondary w-100 py-4 btn-lg-touch">Ingresos y egresos</a>
   </div>
   <?php endif; ?>
 </div>

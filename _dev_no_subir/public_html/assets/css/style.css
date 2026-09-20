@@ -20,6 +20,338 @@ body {
     background-color: var(--marca-principal) !important;
 }
 
+/* El color de link por defecto de Bootstrap para navbar-dark
+   (rgba(255,255,255,.55)) queda muy apagado sobre nuestro rojo de marca,
+   que no es tan oscuro como el bg-dark original. Subimos el contraste
+   para que se lean bien los ítems del menú sin tocar el estado activo/hover
+   (que ya vienen en blanco pleno). */
+.navbar-dark .navbar-nav .nav-link {
+    color: rgba(255, 255, 255, 0.88);
+}
+
+.navbar-dark .navbar-nav .nav-link:hover,
+.navbar-dark .navbar-nav .nav-link:focus,
+.navbar-dark .navbar-nav .show > .nav-link {
+    color: #fff;
+}
+
+/* =========================================================
+   SIDEBAR (reemplaza la navbar horizontal desde la ronda 11)
+   =========================================================
+   - Debajo de 768px: `#sidebar` es un offcanvas de Bootstrap
+     (`offcanvas-md`), oculto por default, se abre con la hamburguesa de
+     `.mobile-topbar`. Ocupa toda la pantalla como overlay temporal, no
+     resta espacio permanente al contenido (clave para el POS en celular).
+   - Desde 768px: Bootstrap resetea el offcanvas a `width:auto!important`
+     (para que deje de comportarse como overlay); de ahí que el ancho fijo
+     y el `position:fixed` de acá abajo necesiten `!important` + selector
+     con ID para poder ganarle a esa regla nativa.
+   - `--sidebar-width` variable y colapsable a solo íconos
+     (`--sidebar-width-collapsed`) con el botón «: pensado sobre todo para
+     tablet, donde el POS necesita el máximo ancho posible para la grilla
+     de productos y el panel de pedido. */
+:root {
+    --sidebar-width: 226px;
+    --sidebar-width-collapsed: 64px;
+}
+
+.app-sidebar {
+    background-color: var(--marca-principal);
+    color: #fff;
+}
+
+.app-sidebar .offcanvas-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.sidebar-body {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.sidebar-brand {
+    padding: 14px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    min-height: 64px;
+}
+
+.sidebar-brand-text {
+    color: #fff;
+    font-weight: 700;
+    font-size: 1.05rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar-collapse-btn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #fff;
+    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+
+.sidebar-collapse-btn:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Sin este reset, el contorno de foco por defecto del navegador (un
+   recuadro grueso, normalmente negro) se dibuja hacia AFUERA del botón y,
+   como el botón queda pegado al borde derecho del sidebar (sobre todo
+   colapsado, con solo 64px de ancho), ese recuadro se sale visualmente
+   hacia el contenido principal — bug real reportado con captura de
+   pantalla real en la ronda 12. `outline-offset` negativo lo mantiene dentro
+   de los límites del botón. */
+.sidebar-collapse-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.85);
+    outline-offset: -3px;
+}
+
+.sidebar-toggle-icon {
+    display: inline-block;
+    transition: transform 0.15s ease;
+}
+
+.sidebar-nav {
+    padding: 8px;
+}
+
+.sidebar-nav .nav-link,
+.sidebar-group-toggle {
+    color: rgba(255, 255, 255, 0.88);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    font-size: 0.98rem;
+}
+
+.sidebar-nav .nav-link:hover,
+.sidebar-nav .nav-link:focus,
+.sidebar-group-toggle:hover,
+.sidebar-group-toggle:focus {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.sidebar-nav .nav-link.active {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.22);
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 #fff;
+}
+
+.sidebar-icon {
+    flex: 0 0 auto;
+    width: 22px;
+    text-align: center;
+    font-size: 1.05rem;
+}
+
+.sidebar-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar-chevron {
+    margin-left: auto;
+    transition: transform 0.15s ease;
+    font-size: 0.8rem;
+}
+
+.sidebar-group-toggle[aria-expanded="true"] .sidebar-chevron {
+    transform: rotate(180deg);
+}
+
+.sidebar-subnav {
+    padding-left: 30px;
+    margin-bottom: 4px;
+}
+
+.sidebar-subnav .nav-link {
+    font-size: 0.92rem;
+    padding: 8px 10px;
+}
+
+.sidebar-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 12px 14px 16px;
+}
+
+.sidebar-user-info {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar-footer-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(255, 255, 255, 0.88);
+    text-decoration: none;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 0.92rem;
+}
+
+.sidebar-footer-link:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Barra superior mobile (< 768px): hamburguesa + logo. Reemplaza la
+   navbar-toggler de Bootstrap por barras propias en blanco garantizado
+   (el toggler-icon default de Bootstrap depende de una variable de
+   color que no vale la pena pelear para un ícono tan simple). */
+.mobile-topbar {
+    background-color: var(--marca-principal);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 1040;
+}
+
+.hamburger-btn {
+    background: transparent;
+    border: 0;
+    padding: 6px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+}
+
+.hamburger-btn span {
+    display: block;
+    width: 24px;
+    height: 3px;
+    background-color: #fff;
+    border-radius: 2px;
+}
+
+.mobile-topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #fff;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+
+.mobile-topbar-brand:hover {
+    color: #fff;
+}
+
+.main-content {
+    padding-top: 16px;
+}
+
+/* Desde 768px: sidebar fijo a la izquierda (deja de ser offcanvas) y el
+   contenido principal se corre a la derecha. Ver nota arriba sobre por
+   qué hace falta !important + selector con ID acá.
+   OJO: Bootstrap, en ese mismo reset a partir de 768px, también fuerza
+   ".offcanvas-md { background-color: transparent !important }" (no solo
+   width/position). Sin repetir el !important acá, el sidebar queda
+   transparente (se ve el crema del body detrás) con el texto blanco
+   encima, casi ilegible. Bug real detectado con captura de pantalla real
+   en la ronda 12, no visible en las pruebas de la ronda 11 porque esas
+   capturas no llegaron a esta pantalla en particular. */
+@media (min-width: 768px) {
+    #sidebar.offcanvas-md {
+        width: var(--sidebar-width) !important;
+        position: fixed !important;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 1030;
+        border-right: 0;
+        background-color: var(--marca-principal) !important;
+    }
+
+    body.sidebar-collapsed #sidebar.offcanvas-md {
+        width: var(--sidebar-width-collapsed) !important;
+    }
+
+    .main-content {
+        margin-left: var(--sidebar-width);
+        /* El container-fluid trae width:100% del ancho total de la página;
+           sin restarle el ancho del sidebar acá, el margin-left lo corre
+           226px hacia la derecha SIN achicarlo, y el borde derecho queda
+           226px afuera del viewport (scroll horizontal fantasma que corta
+           contenido, ej: la última tarjeta de accesos rápidos del
+           dashboard). */
+        width: calc(100% - var(--sidebar-width));
+        padding-top: 20px;
+        transition: margin-left 0.15s ease, width 0.15s ease;
+    }
+
+    body.sidebar-collapsed .main-content {
+        margin-left: var(--sidebar-width-collapsed);
+        width: calc(100% - var(--sidebar-width-collapsed));
+    }
+
+    /* Colapsado: solo íconos. Se ocultan etiquetas de texto, marca, chevrons
+       y todo lo que no entre en un riel angosto; los <title> de cada link
+       quedan como tooltip nativo del navegador para no perder el rótulo. */
+    body.sidebar-collapsed .sidebar-label,
+    body.sidebar-collapsed .sidebar-brand-text,
+    body.sidebar-collapsed .sidebar-chevron,
+    body.sidebar-collapsed .sidebar-user-info {
+        display: none;
+    }
+
+    body.sidebar-collapsed .sidebar-toggle-icon {
+        transform: rotate(180deg);
+    }
+
+    body.sidebar-collapsed .sidebar-brand {
+        justify-content: center;
+    }
+
+    body.sidebar-collapsed .sidebar-brand > a {
+        display: none;
+    }
+
+    body.sidebar-collapsed .sidebar-nav .nav-link,
+    body.sidebar-collapsed .sidebar-group-toggle,
+    body.sidebar-collapsed .sidebar-footer-link {
+        justify-content: center;
+    }
+
+    body.sidebar-collapsed .sidebar-subnav {
+        padding-left: 0;
+    }
+
+    /* Los submenús (Reportes/Configuración) no tienen forma clara de
+       mostrarse solo-ícono con varios ítems distintos bajo un mismo
+       ícono de grupo; en colapsado se ocultan y quedan accesibles
+       expandiendo el sidebar de nuevo con el botón «. */
+    body.sidebar-collapsed .sidebar-subnav {
+        display: none;
+    }
+}
+
 .btn-primary {
     background-color: var(--marca-principal);
     border-color: var(--marca-principal);

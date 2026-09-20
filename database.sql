@@ -65,6 +65,17 @@ CREATE TABLE IF NOT EXISTS mesas (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------
+-- Tabla: medios_pago (ronda 8)
+-- Medios de pago editables desde Medios de pago -> ABM. Reemplaza al
+-- ENUM fijo que tenía antes pedidos.medio_pago.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS medios_pago (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL UNIQUE,
+    activo TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------
 -- Tabla: pedidos
 -- Un pedido (comanda) asociado a una mesa (o "para llevar" si mesa_id es NULL)
 -- ---------------------------------------------------------------------
@@ -74,13 +85,16 @@ CREATE TABLE IF NOT EXISTS mesas (
 --    en cualquier momento antes de cerrado)
 -- Pasar por "entregado" es opcional: se puede cobrar directamente desde
 -- "abierto" o "en_preparacion" sin marcarlo como entregado antes.
+-- canal (ronda 8): 'mesa' si el pedido tiene mesa_id, 'mostrador' si no
+-- (lo que antes era "para llevar"). Se completa al crear el pedido.
 CREATE TABLE IF NOT EXISTS pedidos (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     mesa_id INT UNSIGNED NULL,
+    canal ENUM('mostrador', 'mesa') NOT NULL DEFAULT 'mostrador',
     usuario_id INT UNSIGNED NOT NULL,
     estado ENUM('abierto', 'en_preparacion', 'entregado', 'cerrado', 'cancelado') NOT NULL DEFAULT 'abierto',
     total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    medio_pago ENUM('efectivo', 'tarjeta', 'transferencia') NULL,
+    medio_pago_id INT UNSIGNED NULL,
     creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     entregado_en DATETIME NULL,
     entregado_por_id INT UNSIGNED NULL,
@@ -90,6 +104,7 @@ CREATE TABLE IF NOT EXISTS pedidos (
     cancelado_por_id INT UNSIGNED NULL,
     CONSTRAINT fk_pedidos_mesa FOREIGN KEY (mesa_id) REFERENCES mesas(id),
     CONSTRAINT fk_pedidos_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+    CONSTRAINT fk_pedidos_medio_pago FOREIGN KEY (medio_pago_id) REFERENCES medios_pago(id),
     CONSTRAINT fk_pedidos_entregado_por FOREIGN KEY (entregado_por_id) REFERENCES usuarios(id),
     CONSTRAINT fk_pedidos_cerrado_por FOREIGN KEY (cerrado_por_id) REFERENCES usuarios(id),
     CONSTRAINT fk_pedidos_cancelado_por FOREIGN KEY (cancelado_por_id) REFERENCES usuarios(id)
@@ -97,6 +112,7 @@ CREATE TABLE IF NOT EXISTS pedidos (
 
 CREATE INDEX idx_pedidos_estado ON pedidos(estado);
 CREATE INDEX idx_pedidos_cerrado_en ON pedidos(cerrado_en);
+CREATE INDEX idx_pedidos_canal ON pedidos(canal);
 
 -- ---------------------------------------------------------------------
 -- Tabla: pedido_items
@@ -141,12 +157,19 @@ CREATE INDEX idx_mov_creado ON movimientos_stock(creado_en);
 -- Tabla: caja_sesiones
 -- Aperturas y cierres de caja
 -- ---------------------------------------------------------------------
+-- total_tarjeta / total_transferencia quedan como columnas heredadas de
+-- antes de la ronda 8 (cuando el medio de pago era un ENUM fijo de 3
+-- valores). Ya no se completan en cierres nuevos: el desglose completo
+-- y dinámico por medio de pago de cada cierre se guarda en
+-- caja_sesion_medios (ver más abajo). Se conservan acá sin usar para no
+-- romper el historial de cierres viejos que ya las tienen cargadas.
 CREATE TABLE IF NOT EXISTS caja_sesiones (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     usuario_id INT UNSIGNED NOT NULL,
     monto_inicial DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     monto_final_declarado DECIMAL(10,2) NULL,
     total_efectivo DECIMAL(10,2) NULL,
+    total_egresos_efectivo DECIMAL(10,2) NULL,
     total_tarjeta DECIMAL(10,2) NULL,
     total_transferencia DECIMAL(10,2) NULL,
     diferencia DECIMAL(10,2) NULL,
@@ -156,6 +179,58 @@ CREATE TABLE IF NOT EXISTS caja_sesiones (
     nota VARCHAR(500) NULL,
     CONSTRAINT fk_caja_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------
+-- Tabla: caja_sesion_medios (ronda 8)
+-- Desglose de cada cierre de caja por medio de pago (ventas y egresos),
+-- calculado dinámicamente a partir de la lista de medios_pago vigente
+-- al momento del cierre.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS caja_sesion_medios (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    caja_sesion_id INT UNSIGNED NOT NULL,
+    medio_pago_id INT UNSIGNED NOT NULL,
+    total_ventas DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    total_egresos DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    UNIQUE KEY uq_caja_medio (caja_sesion_id, medio_pago_id),
+    CONSTRAINT fk_csm_caja FOREIGN KEY (caja_sesion_id) REFERENCES caja_sesiones(id),
+    CONSTRAINT fk_csm_medio FOREIGN KEY (medio_pago_id) REFERENCES medios_pago(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------
+-- Tabla: categorias_egreso (ronda 8)
+-- Categorías del módulo de Egresos, editables desde su propia ABM.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS categorias_egreso (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    activo TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------
+-- Tabla: egresos (ronda 8)
+-- Salidas de dinero del negocio (proveedores, sueldos, retiros, etc.).
+-- caja_sesion_id queda NULL si se carga sin una caja abierta en ese
+-- momento (igual se puede reportar, pero no se descuenta de ningún cierre).
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS egresos (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    categoria_id INT UNSIGNED NOT NULL,
+    descripcion VARCHAR(255) NOT NULL,
+    monto DECIMAL(10,2) NOT NULL,
+    medio_pago_id INT UNSIGNED NOT NULL,
+    caja_sesion_id INT UNSIGNED NULL,
+    usuario_id INT UNSIGNED NOT NULL,
+    creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    nota VARCHAR(500) NULL,
+    CONSTRAINT fk_egresos_categoria FOREIGN KEY (categoria_id) REFERENCES categorias_egreso(id),
+    CONSTRAINT fk_egresos_medio_pago FOREIGN KEY (medio_pago_id) REFERENCES medios_pago(id),
+    CONSTRAINT fk_egresos_caja FOREIGN KEY (caja_sesion_id) REFERENCES caja_sesiones(id),
+    CONSTRAINT fk_egresos_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_egresos_creado ON egresos(creado_en);
+CREATE INDEX idx_egresos_caja ON egresos(caja_sesion_id);
 
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -193,6 +268,22 @@ INSERT INTO usuarios (nombre, usuario, password_hash, rol) VALUES
 -- Mesas de ejemplo
 INSERT INTO mesas (nombre, capacidad) VALUES
 ('Mesa 1', 4), ('Mesa 2', 4), ('Mesa 3', 2), ('Mesa 4', 6), ('Para Llevar', 0);
+
+-- Medios de pago iniciales (ronda 8)
+INSERT INTO medios_pago (nombre) SELECT 'Efectivo' WHERE NOT EXISTS (SELECT 1 FROM medios_pago WHERE nombre = 'Efectivo');
+INSERT INTO medios_pago (nombre) SELECT 'Transferencia' WHERE NOT EXISTS (SELECT 1 FROM medios_pago WHERE nombre = 'Transferencia');
+INSERT INTO medios_pago (nombre) SELECT 'QR / Mercado Pago' WHERE NOT EXISTS (SELECT 1 FROM medios_pago WHERE nombre = 'QR / Mercado Pago');
+INSERT INTO medios_pago (nombre) SELECT 'Posnet Débito' WHERE NOT EXISTS (SELECT 1 FROM medios_pago WHERE nombre = 'Posnet Débito');
+INSERT INTO medios_pago (nombre) SELECT 'Posnet Crédito' WHERE NOT EXISTS (SELECT 1 FROM medios_pago WHERE nombre = 'Posnet Crédito');
+INSERT INTO medios_pago (nombre) SELECT 'Otro' WHERE NOT EXISTS (SELECT 1 FROM medios_pago WHERE nombre = 'Otro');
+
+-- Categorías de egreso iniciales (ronda 8)
+INSERT INTO categorias_egreso (nombre) SELECT 'Proveedores' WHERE NOT EXISTS (SELECT 1 FROM categorias_egreso WHERE nombre = 'Proveedores');
+INSERT INTO categorias_egreso (nombre) SELECT 'Sueldos' WHERE NOT EXISTS (SELECT 1 FROM categorias_egreso WHERE nombre = 'Sueldos');
+INSERT INTO categorias_egreso (nombre) SELECT 'Retiro de caja' WHERE NOT EXISTS (SELECT 1 FROM categorias_egreso WHERE nombre = 'Retiro de caja');
+INSERT INTO categorias_egreso (nombre) SELECT 'Servicios (luz/gas/internet)' WHERE NOT EXISTS (SELECT 1 FROM categorias_egreso WHERE nombre = 'Servicios (luz/gas/internet)');
+INSERT INTO categorias_egreso (nombre) SELECT 'Mantenimiento' WHERE NOT EXISTS (SELECT 1 FROM categorias_egreso WHERE nombre = 'Mantenimiento');
+INSERT INTO categorias_egreso (nombre) SELECT 'Otro' WHERE NOT EXISTS (SELECT 1 FROM categorias_egreso WHERE nombre = 'Otro');
 
 -- =====================================================================
 -- CARTA REAL — El Batará (ronda 4)
@@ -406,3 +497,11 @@ INSERT INTO productos (categoria_id, nombre, tipo_venta, precio, stock_actual, s
 -- ALTER TABLE pedidos ADD COLUMN entregado_en DATETIME NULL AFTER creado_en;
 -- ALTER TABLE pedidos ADD COLUMN entregado_por_id INT UNSIGNED NULL AFTER entregado_en;
 -- ALTER TABLE pedidos ADD CONSTRAINT fk_pedidos_entregado_por FOREIGN KEY (entregado_por_id) REFERENCES usuarios(id);
+
+-- Necesaria si tu base es anterior a la ronda 8 (medios de pago dinámicos,
+-- canal mostrador/mesa, y módulo de egresos). Este archivo (database.sql)
+-- ya crea todo esto desde cero para una instalación nueva; si tu base YA
+-- existía antes de la ronda 8, correr en su lugar el archivo
+-- migracion_ronda8.sql completo (una sola vez, desde phpMyAdmin -> SQL).
+-- Ver el encabezado de ese archivo para el detalle del mapeo de
+-- pedidos.medio_pago (ENUM viejo) a medios_pago (tabla nueva).

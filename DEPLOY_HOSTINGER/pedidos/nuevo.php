@@ -32,7 +32,7 @@ if ($pedidoId) {
         }
 
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare('INSERT INTO pedidos (mesa_id, usuario_id, estado) VALUES (?, ?, ?)');
+        $stmt = $pdo->prepare("INSERT INTO pedidos (mesa_id, canal, usuario_id, estado) VALUES (?, 'mesa', ?, ?)");
         $stmt->execute([$mesaId, $_SESSION['usuario_id'], 'abierto']);
         $pedidoId = (int)$pdo->lastInsertId();
         $pdo->prepare("UPDATE mesas SET estado = 'ocupada' WHERE id = ?")->execute([$mesaId]);
@@ -43,7 +43,7 @@ if ($pedidoId) {
         $pedido = $stmt->fetch();
     }
 } elseif ($paraLlevar) {
-    $stmt = $pdo->prepare('INSERT INTO pedidos (mesa_id, usuario_id, estado) VALUES (NULL, ?, ?)');
+    $stmt = $pdo->prepare("INSERT INTO pedidos (mesa_id, canal, usuario_id, estado) VALUES (NULL, 'mostrador', ?, ?)");
     $stmt->execute([$_SESSION['usuario_id'], 'abierto']);
     $pedidoId = (int)$pdo->lastInsertId();
 
@@ -95,7 +95,12 @@ require __DIR__ . '/../includes/header.php';
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <h2 class="mb-0"><?= $mesa ? h($mesa['nombre']) : 'Para llevar' ?></h2>
+  <h2 class="mb-0">
+    <?= $mesa ? h($mesa['nombre']) : 'Para llevar' ?>
+    <span class="badge <?= $pedido['canal'] === 'mesa' ? 'bg-primary' : 'bg-secondary' ?> align-middle">
+      <?= $pedido['canal'] === 'mesa' ? 'Mesa' : 'Mostrador' ?>
+    </span>
+  </h2>
   <div class="d-flex flex-wrap gap-2">
     <?php if ($pedido['estado'] === 'abierto'): ?>
       <button class="btn btn-info btn-lg-touch" onclick="enviarCocina()">Enviar a cocina</button>

@@ -11,20 +11,20 @@ $hasta = $_GET['hasta'] ?? date('Y-m-d');
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) { $desde = date('Y-m-d', strtotime('-29 days')); }
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) { $hasta = date('Y-m-d'); }
 
-$stmt = $pdo->prepare("SELECT medio_pago, COUNT(*) AS cantidad, SUM(total) AS total
-                        FROM pedidos
-                        WHERE estado = 'cerrado' AND DATE(cerrado_en) BETWEEN ? AND ?
-                        GROUP BY medio_pago");
+$stmt = $pdo->prepare("SELECT mp.nombre AS medio_pago, COUNT(p.id) AS cantidad, COALESCE(SUM(p.total), 0) AS total
+                        FROM pedidos p
+                        JOIN medios_pago mp ON mp.id = p.medio_pago_id
+                        WHERE p.estado = 'cerrado' AND DATE(p.cerrado_en) BETWEEN ? AND ?
+                        GROUP BY mp.id, mp.nombre
+                        ORDER BY mp.nombre");
 $stmt->execute([$desde, $hasta]);
 $filas = $stmt->fetchAll();
 
 $totalGeneral = array_sum(array_column($filas, 'total'));
 
-$etiquetasMedios = ['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transferencia / QR'];
-
 if (($_GET['exportar'] ?? '') === 'csv') {
     $filasCsv = array_map(fn($f) => [
-        $etiquetasMedios[$f['medio_pago']] ?? $f['medio_pago'],
+        $f['medio_pago'],
         $f['cantidad'],
         number_format((float)$f['total'], 2, ',', ''),
     ], $filas);
@@ -65,7 +65,7 @@ require __DIR__ . '/../../includes/header.php';
       <tbody>
         <?php foreach ($filas as $f): ?>
           <tr>
-            <td><?= h($etiquetasMedios[$f['medio_pago']] ?? $f['medio_pago']) ?></td>
+            <td><?= h($f['medio_pago']) ?></td>
             <td><?= (int)$f['cantidad'] ?></td>
             <td><?= formatearMoneda((float)$f['total']) ?></td>
           </tr>
@@ -81,16 +81,17 @@ require __DIR__ . '/../../includes/header.php';
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="<?= $base ?>assets/js/chart.umd.min.js"></script>
 <script>
-const etiquetas = <?= json_encode(array_map(fn($f) => $etiquetasMedios[$f['medio_pago']] ?? $f['medio_pago'], $filas)) ?>;
+const etiquetas = <?= json_encode(array_map(fn($f) => $f['medio_pago'], $filas)) ?>;
 const totales = <?= json_encode(array_map(fn($f) => (float)$f['total'], $filas)) ?>;
+const PALETA_GRAFICOS = ['#8B2E2E', '#c9a24b', '#4f7a6b', '#7a6a58', '#b85c5c', '#3f6b8a', '#a8763e', '#6f4e7c'];
 
 new Chart(document.getElementById('graficoMedios'), {
   type: 'doughnut',
   data: {
     labels: etiquetas,
-    datasets: [{ data: totales }]
+    datasets: [{ data: totales, backgroundColor: PALETA_GRAFICOS }]
   },
   options: { responsive: true }
 });

@@ -119,6 +119,26 @@ function intPositivoONull($valor): ?int
 }
 
 /**
+ * Ejecuta $funcion dentro de una transacción: begin, la corre, y hace
+ * commit si no lanzó excepción o rollback si lanzó alguna. Devuelve lo
+ * que haya devuelto $funcion. Se usa para operaciones sensibles con
+ * varios pasos (cierre de caja, cierre de pedido) donde un paso a mitad
+ * de camino no puede quedar aplicado si otro paso falla.
+ */
+function ejecutarTransaccion(PDO $pdo, callable $funcion)
+{
+    $pdo->beginTransaction();
+    try {
+        $resultado = $funcion($pdo);
+        $pdo->commit();
+        return $resultado;
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/**
  * Recalcula el total de un pedido sumando sus items y lo guarda en la tabla pedidos.
  */
 function recalcularTotalPedido(PDO $pdo, int $pedidoId): void

@@ -10,9 +10,10 @@ if (!$pedidoId) {
     redirigir('mesas/salon.php');
 }
 
-$stmt = $pdo->prepare("SELECT p.*, m.nombre AS mesa_nombre, u.nombre AS mozo_nombre, uc.nombre AS cobrador_nombre
+$stmt = $pdo->prepare("SELECT p.*, mp.nombre AS medio_pago_nombre, m.nombre AS mesa_nombre, u.nombre AS mozo_nombre, uc.nombre AS cobrador_nombre
                         FROM pedidos p
                         LEFT JOIN mesas m ON m.id = p.mesa_id
+                        LEFT JOIN medios_pago mp ON mp.id = p.medio_pago_id
                         JOIN usuarios u ON u.id = p.usuario_id
                         LEFT JOIN usuarios uc ON uc.id = p.cerrado_por_id
                         WHERE p.id = ? AND p.estado = 'cerrado'");
@@ -31,7 +32,6 @@ $stmt = $pdo->prepare("SELECT pi.*, prod.nombre AS producto_nombre, prod.tipo_ve
 $stmt->execute([$pedidoId]);
 $items = $stmt->fetchAll();
 
-$etiquetasMedios = ['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transferencia / QR'];
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -55,7 +55,23 @@ $etiquetasMedios = ['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transfere
   .cant { white-space: nowrap; }
   .total { font-size: 16px; font-weight: bold; text-align: right; margin-top: 8px; }
   .btns { text-align: center; margin-top: 20px; }
-  .btns button { padding: 10px 20px; font-size: 14px; margin: 0 4px; }
+  .btns button {
+    padding: 10px 20px;
+    font-size: 14px;
+    margin: 0 4px;
+    font-family: Arial, sans-serif;
+    border-radius: 6px;
+    border: 2px solid #8B2E2E;
+    cursor: pointer;
+  }
+  .btns button.primario {
+    background-color: #8B2E2E;
+    color: #fff;
+  }
+  .btns button.secundario {
+    background-color: #fff;
+    color: #8B2E2E;
+  }
 
   @media print {
     .btns { display: none; }
@@ -87,14 +103,14 @@ $etiquetasMedios = ['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transfere
   <div class="linea"></div>
 
   <div class="total">Total: <?= formatearMoneda((float)$pedido['total']) ?></div>
-  <p class="centro">Medio de pago: <?= h($etiquetasMedios[$pedido['medio_pago']] ?? $pedido['medio_pago']) ?></p>
+  <p class="centro">Medio de pago: <?= h($pedido['medio_pago_nombre'] ?? '-') ?></p>
 
   <div class="linea"></div>
   <p class="centro">¡Gracias por su visita!</p>
 
   <div class="btns">
-    <button onclick="window.print()">Imprimir</button>
-    <button onclick="window.location.href='../mesas/salon.php'">Volver al salón</button>
+    <button class="primario" onclick="window.print()">Imprimir</button>
+    <button class="secundario" onclick="window.location.href='../mesas/salon.php'">Volver al salón</button>
   </div>
 </body>
 </html>

@@ -77,16 +77,17 @@ require __DIR__ . '/../../includes/header.php';
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="<?= $base ?>assets/js/chart.umd.min.js"></script>
 <script>
 const etiquetas = <?= json_encode(array_map(fn($f) => $f['nombre'], $filas)) ?>;
 const totales = <?= json_encode(array_map(fn($f) => (float)$f['total_vendido'], $filas)) ?>;
+const PALETA_GRAFICOS = ['#8B2E2E', '#c9a24b', '#4f7a6b', '#7a6a58', '#b85c5c', '#3f6b8a', '#a8763e', '#6f4e7c'];
 
 new Chart(document.getElementById('graficoTop'), {
   type: 'pie',
   data: {
     labels: etiquetas,
-    datasets: [{ data: totales }]
+    datasets: [{ data: totales, backgroundColor: PALETA_GRAFICOS }]
   },
   options: { responsive: true }
 });

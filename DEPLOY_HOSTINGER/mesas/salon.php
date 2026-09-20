@@ -5,7 +5,13 @@ requerirLogin();
 
 $pdo = obtenerConexion();
 
-$mesas = $pdo->query('SELECT * FROM mesas WHERE activo = 1 ORDER BY nombre')->fetchAll();
+// capacidad = 0 identifica la mesa placeholder histórica "Para Llevar": se
+// excluye de la grilla porque hoy el botón "Para llevar" de arriba ya cubre
+// ese flujo y arma el pedido con canal = 'mostrador' correctamente. Dejar
+// visible esa mesa duplicaba el camino y, si alguien la tocaba, el pedido
+// quedaba creado con mesa_id (canal = 'mesa') aunque en los hechos era para
+// llevar, ensuciando el reporte de canal de la ronda 8.
+$mesas = $pdo->query('SELECT * FROM mesas WHERE activo = 1 AND capacidad > 0 ORDER BY nombre')->fetchAll();
 
 // Para cada mesa ocupada, buscamos el pedido abierto (id, hora de
 // apertura y estado) para poder linkear directo, mostrar hace cuánto
