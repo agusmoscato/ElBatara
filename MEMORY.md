@@ -1873,6 +1873,256 @@ producción:
   herramientas de shell que no se usaron en rondas anteriores, en vez de
   descubrir sus efectos secundarios sobre la marcha.
 
+## Ronda 21 — mesas adentro/afuera, pre-cuenta imprimible y circuito de cocina por ítem
+
+El usuario pidió 4 funcionalidades nuevas sobre el POS/Salón: ubicación de
+mesas (adentro/afuera), una pre-cuenta imprimible que NO cobra ni cambia
+estados, un circuito de cocina por ítem con rondas repetibles, y un panel de
+cocina en tiempo real con polling + sonido. El pedido original describía un
+estado del código desactualizado (mencionaba `en_preparacion`/`entregado`
+como pasos del pedido completo) — se relevó el estado real primero
+(`pedidos.estado` es `abierto/cuenta_pedida/cerrado/cancelado` desde la
+ronda 20, sin pasos de cocina a nivel pedido) y se construyó sobre eso, sin
+romper el flujo existente de "Pedir la cuenta" (`pedidos/pedir_cuenta.php`,
+que SÍ cambia `pedidos.estado` a `cuenta_pedida`).
+
+### Cambio de modelo de datos importante: `pedido_items.estado_cocina`
+
+Se agrega un circuito de cocina **por ítem**, independiente del estado del
+pedido: `pedido_items.estado_cocina ENUM('pendiente','enviado','listo','entregado')
+NOT NULL DEFAULT 'pendiente'` + `pedido_items.enviado_cocina_en DATETIME NULL`
+(para mostrar "hace cuánto" por ítem en el panel de cocina, no por pedido
+completo — un pedido puede tener ítems de más de una ronda enviados en
+momentos distintos). `pedidos.estado` NO gana ningún paso nuevo: sigue
+alcanzando con `abierto/cuenta_pedida/cerrado/cancelado`, confirmado con la
+prueba end-to-end de abajo (un pedido puede seguir "abierto" mientras sus
+ítems van y vienen de cocina, y "cuenta_pedida" convive sin problema con
+ítems todavía en cocina — el Salón combina ambas señales, ver más abajo).
+
+Migración de datos (`migracion_ronda21.sql`): los `pedido_items` de pedidos
+ya `cerrado`/`cancelado` pasan a `estado_cocina = 'entregado'` (no tiene
+sentido que el panel de cocina los muestre como pendientes de un pedido que
+ya terminó). Los de pedidos `abierto`/`cuenta_pedida` quedan en el default
+`'pendiente'` — se documenta explícitamente que esto asume que la migración
+se corre SIN pedidos a mitad de cocinar (recomendado correrla entre turnos o
+con el local cerrado), porque el modelo viejo no tenía forma de saber si un
+ítem ya se había enviado a cocina o no.
+
+### Decisiones de diseño con margen propio (documentadas como pide el pedido)
+
+1. **Nombre del botón de pre-cuenta: "Vista previa de cuenta"**, no "Pedir
+   la cuenta" (ese nombre ya lo usa el botón existente de
+   `pedir_cuenta.php`, que SÍ cambia `pedidos.estado`). Los dos botones
+   conviven en `pedidos/nuevo.php`: "🧾 Pedir la cuenta" (cambia estado) y
+   "🧾 Vista previa de cuenta" (abre `pedidos/precuenta.php` en pestaña
+   nueva, sin tocar nada). `precuenta.php` es una vista standalone calcada
+   del formato angosto tipo ticket de `ticket.php`, con un aviso "⚠
+   PRE-CUENTA — NO ES COMPROBANTE DE PAGO" repetido arriba y abajo del
+   detalle, y accesible mientras el pedido esté `abierto` o
+   `cuenta_pedida` (no cambia ningún estado, se puede abrir las veces que
+   haga falta, el pedido sigue editable después).
+2. **"Marcar entregado" es por PEDIDO completo, no por ítem individual**:
+   un solo botón en `pedidos/nuevo.php` (visible solo si hay algún ítem
+   `listo`) marca TODOS los ítems `listo` de ese pedido como `entregado` de
+   una vez (`pedidos/marcar_entregado.php`). Es la acción real del mozo
+   (llevar la bandeja a la mesa con todo lo que está listo junto), y evita
+   una fila de botones por ítem en un panel que ya tiene bastante
+   información. Mismo criterio simétrico para "Enviar a cocina": un botón
+   manda TODOS los `pendiente` de ese pedido a `enviado` de una vez
+   (`pedidos/enviar_cocina.php`), puede juntar ítems agregados en más de
+   una llamada al botón si el mozo no lo había tocado antes.
+   `cocina/marcar_listo.php` sí soporta las dos granularidades (`item_id`
+   puntual desde el botón de un ítem individual, o `pedido_id` desde el
+   botón "Marcar todo listo" del grupo/mesa) porque en cocina sí tiene
+   sentido terminar un plato antes que otro dentro del mismo pedido.
+3. **Pedir el mismo producto otra vez cuando la línea anterior ya está
+   `listo`/`entregado` crea una FILA NUEVA, no suma cantidad a la
+   existente**: `agregar_item.php` solo mergea con una línea existente si
+   su `estado_cocina` es `'pendiente'` o `'enviado'` (todavía no se sirvió).
+   Si ya está `listo`/`entregado`, nace una línea nueva en `'pendiente'`.
+   Es la pieza clave para que "pedir de nuevo en la misma mesa" (rondas
+   repetibles, como pide el punto 3 del pedido) se vea como una ronda de
+   cocina distinta y no haga crecer en silencio una línea que cocina o el
+   mozo ya dieron por terminada. Probado explícitamente más abajo.
+4. **Colores de mesa en el Salón: "listo" gana sobre "en cocina"**. Se
+   agregan dos clases nuevas (`mesa-en-cocina` azul/`--info`,
+   `mesa-para-retirar` verde) que se superponen al color de
+   Ocupada/Cuenta pedida existente cuando algún ítem activo del pedido
+   está `enviado` o `listo` — si hay de las dos cosas a la vez, gana
+   "listo" (más urgente para el mozo) y el texto combina ambas señales
+   ("Cuenta pedida · Retirar", "Ocupada · En cocina"). Si todos los ítems
+   activos ya están `entregado` (o no hay ninguno), no se toca nada del
+   comportamiento viejo. Bug real encontrado y corregido en el proceso: el
+   texto combinado más largo desbordaba y se superponía con el nombre de
+   la mesa (`.mesa-card-fila` no tenía `flex-wrap`) — se agregó
+   `flex-wrap: wrap` y quedó prolijo, verificado con captura antes/después.
+5. **Panel de cocina sin gate de permiso**: `cocina/panel.php` y
+   `cocina/api.php` usan `requerirLogin()` solo (cualquier empleado o admin
+   logueado puede abrirlo), mismo criterio ya documentado para Salón/POS y
+   Stock desde la ronda 17 ("sin gate de permiso, decisión explícita") —
+   es una pantalla operativa para dejar abierta en una tablet de cocina,
+   no un ABM.
+6. **Cancelar un pedido con ítems en distintos estados de cocina no
+   necesita tocar `estado_cocina` para nada**: `pedidos/cancelar.php` no se
+   modificó. Alcanza con que `cocina/api.php` filtre
+   `ped.estado IN ('abierto','cuenta_pedida')` — apenas el pedido pasa a
+   `cancelado`, sus ítems (aunque queden con `estado_cocina = 'enviado'`/
+   `'listo'` sin actualizar) desaparecen solos de la cola de cocina y del
+   color del Salón. Probado explícitamente con un pedido con un ítem
+   `listo` y otro `enviado` a la vez: cancelar devolvió el stock, liberó la
+   mesa, y `cocina/api.php` quedó vacío para ese pedido de inmediato.
+7. **Sonido del panel de cocina**: WAV corto generado con un script PHP
+   propio (`assets/sonidos/alerta_cocina.wav`, dos tonos ascendentes tipo
+   "ding-dong", ~0.35s, sin dependencias externas ni CDN) en vez de buscar
+   un archivo de stock. Botón "🔔 Activar sonido" hace un
+   `play()`+`pause()` inmediato disparado por el click real del usuario
+   para desbloquear el autoplay de reproducciones futuras sin interacción
+   (política estándar de los navegadores). El JS detecta ítems `enviado`
+   NUEVOS comparando el `Set` de `item_id` del ciclo anterior contra el
+   actual y suena UNA sola vez por ciclo aunque hayan llegado varios ítems
+   juntos (`cocina/panel.php`, función `cargarPedidos()`).
+
+### Endpoints/pantallas nuevas
+
+- `pedidos/precuenta.php` (vista previa imprimible, no cambia estado).
+- `pedidos/enviar_cocina.php` (POST JSON, manda todos los `pendiente` de un
+  pedido a `enviado`).
+- `pedidos/marcar_entregado.php` (POST JSON, manda todos los `listo` de un
+  pedido a `entregado`).
+- `cocina/panel.php` (pantalla, polling cada 6s a `cocina/api.php`).
+- `cocina/api.php` (JSON de solo lectura: ítems `enviado`/`listo` de
+  pedidos activos, agrupados por pedido/mesa).
+- `cocina/marcar_listo.php` (POST JSON, marca un `item_id` puntual o todos
+  los `enviado` de un `pedido_id`).
+- Todos los POST reimplementan la verificación de CSRF a mano para
+  responder JSON (mismo patrón ya documentado como deuda conocida para
+  `agregar_item.php`/`quitar_item.php`, no es nuevo de esta ronda).
+- `obtenerEstadoPedido()` (`includes/functions.php`) ahora devuelve también
+  `estado_cocina`/`estado_cocina_texto` por ítem y
+  `hay_pendientes_cocina`/`hay_listos_cocina` a nivel pedido — el JS de
+  `pedidos/nuevo.php` usa esos dos flags para mostrar/ocultar los botones
+  "Enviar a cocina"/"Marcar entregado" sin recargar la página.
+- Sidebar (`includes/header.php`): ítem nuevo "🍳 Cocina" entre Egresos y
+  Caja, visible para cualquier usuario logueado (no está adentro de ningún
+  `if (tienePermiso(...))`, coherente con el punto 5 de arriba).
+  `$versionCss` subido a `20260923-r21`.
+
+### Mesas adentro/afuera
+
+`mesas.ubicacion ENUM('adentro','afuera') NOT NULL DEFAULT 'adentro'`.
+`mesas/listar.php` (ABM) suma el campo al alta y a cada fila editable.
+`mesas/salon.php` separa la grilla en dos secciones con encabezado propio
+(`.salon-seccion-titulo`) — "🏠 Salón interno" y "🌿 Patio / exterior" —
+usando una función local (`$renderTarjetaMesa`) para no duplicar el bloque
+de tarjeta. Si una sección queda vacía (todas las mesas activas del mismo
+lado), no se muestra el encabezado vacío.
+
+### Validación de esta ronda (ejecución real, no revisión de código)
+
+Entorno igual al de rondas anteriores: `mysqld` descartable de XAMPP
+(datadir propio, puerto 3308) + `database.sql` actualizado importado +
+`php -S 127.0.0.1:8921 -t _dev_no_subir/public_html` + Edge headless vía
+CDP (puerto 9333, script `_test_env/shot.ps1` nuevo, con
+`Emulation.setDeviceMetricsOverride` y `Network.setCookie` para reusar la
+sesión ya logueada por `curl`).
+
+- **Flujo completo de dos rondas de cocina en la misma mesa, verificado
+  contra la base real en cada paso** (no solo "debería andar"):
+  1. Login admin, abrir caja $5.000.
+  2. Mesa 1: pedido nuevo, 2× Costeletas + 1× Sorrentinos (ronda 1) →
+     `agregar_item.php` responde `estado_cocina: "pendiente"` en los dos.
+  3. "Enviar a cocina" → `enviar_cocina.php` pasa los 2 ítems a `enviado`;
+     `cocina/api.php` los lista agrupados bajo "Mesa 1"; `mesas/salon.php`
+     devuelve la clase `mesa-en-cocina` para esa mesa (confirmado con
+     `grep` sobre el HTML real).
+  4. "Marcar todo listo" desde `cocina/marcar_listo.php` (`pedido_id`) →
+     los 2 pasan a `listo`; salón pasa a `mesa-para-retirar`;
+     `cocina/api.php` los sigue mostrando pero como `listo`.
+  5. "Marcar entregado" desde `pedidos/marcar_entregado.php` → los 2 pasan
+     a `entregado`; `cocina/api.php` queda `"pedidos":[]` para esa mesa;
+     salón vuelve a `mesa-ocupada` normal.
+  6. **Ronda 2 en la MISMA mesa**: se pide de nuevo 1× Costeletas (mismo
+     producto que ya estaba `entregado`). Confirmado con la respuesta JSON
+     que se creó una fila NUEVA (`id: 3`, `estado_cocina: "pendiente"`) en
+     vez de sumarle cantidad a la fila `id: 1` que ya estaba `entregado`
+     (que se mantuvo en `cantidad: 2, estado_cocina: entregado`).
+  7. Se repite enviar a cocina → listo → entregado para la ronda 2. Total
+     final del pedido: `$62.000,00` (`28.000 + 20.000 + 14.000`, verificado
+     contra `pedidos.total` en la base con `mysql.exe` directo, no solo la
+     respuesta JSON).
+  8. `pedidos/precuenta.php` consultado a mitad de la ronda 2 (pedido
+     todavía `abierto`, total parcial `$62.000,00`) — confirmado con
+     `SELECT estado, total FROM pedidos WHERE id = 1` que la vista NO tocó
+     ni el estado ni el total.
+  9. "Cobrar / Cerrar" con medio de pago Efectivo → `pedidos.estado =
+     'cerrado'`, `total = 62000.00`, `medio_pago_id = 1`, mesa vuelve a
+     `libre` — los 3 ítems de las dos rondas quedaron en la misma cuenta,
+     como pedía el flujo de prueba.
+- **Caso borde "cancelar con ítems mixtos en cocina"**: pedido en Mesa 2
+  con un ítem `listo` y otro `enviado` a la vez, cancelado con motivo
+  obligatorio → `pedidos.estado = 'cancelado'`, stock de los dos productos
+  devuelto (verificado contra `productos.stock_actual` antes/después),
+  mesa liberada, y tanto `cocina/api.php` como el color de `mesas/salon.php`
+  reflejaron la desaparición del pedido de la cola de cocina de inmediato
+  (sin tocar `pedido_items.estado_cocina`, que quedó "congelado" en
+  `listo`/`enviado` pero es irrelevante una vez cancelado).
+- **CSRF inválido → 403** confirmado en los 2 endpoints nuevos más
+  sensibles (`pedidos/enviar_cocina.php`, `cocina/marcar_listo.php`).
+- **Capturas reales** (`_test_env/shots/`): `r21_salon_dividido_fix.png`
+  (las 4 mesas con sus 4 estados distintos: en cocina/para
+  retirar/cuenta pedida/libre, secciones adentro/afuera separadas),
+  `r21_precuenta.png` (aviso de pre-cuenta bien visible arriba y abajo),
+  `r21_cocina_panel.png` (un ítem "EN COCINA" con botón "Marcar listo" y
+  otro "LISTO" ya sin botón, botón "Marcar todo listo" del grupo,
+  "Activar sonido" arriba a la derecha), `r21_pos_botones.png` (los 4
+  botones de `pedidos/nuevo.php` conviviendo: Pedir la cuenta / Marcar
+  entregado / Vista previa de cuenta / Cobrar-Cerrar, badge "LISTO" junto
+  al ítem del carrito).
+- **Bug real encontrado y corregido durante esta misma ronda** (no
+  preexistente): el texto combinado del badge de mesa ("Ocupada · En
+  cocina") se salía de la tarjeta y tapaba el nombre de la mesa en la
+  primera captura — `.mesa-card-fila` no tenía `flex-wrap`. Corregido
+  agregando `flex-wrap: wrap` y re-verificado con una segunda captura
+  limpia (`r21_salon_dividido_fix.png` ya incluye el fix).
+- **Lo que NO se verificó con ejecución real, solo por revisión de
+  código**: la reproducción real del sonido del navegador (headless no
+  tiene salida de audio ni dispara interacción de usuario real) — se
+  verificó que el WAV generado es un archivo válido (reproducible,
+  29 KB), que el flujo `play()+pause()` en el click de "Activar sonido"
+  sigue el patrón estándar documentado para desbloquear autoplay, y que la
+  lógica de "detectar ítems `enviado` nuevos vs. el ciclo anterior → una
+  sola reproducción por ciclo" es correcta por inspección directa del
+  código (`itemsEnviadosVistos` como `Set`, comparado antes de
+  reemplazarlo en cada `cargarPedidos()`). El polling en sí (el `fetch`
+  cada 6s a `cocina/api.php` y el diffing contra el DOM) sí se probó con
+  ejecución real disparando cambios "desde otro lado" (los mismos POST de
+  `curl` que la mesa 1 recibió) y confirmando con capturas que el HTML
+  devuelto por `cocina/api.php` reflejaba esos cambios — no se instrumentó
+  un segundo navegador headless en paralelo para ver la actualización
+  automática en vivo dentro de los 6 segundos, pero el endpoint que la
+  alimenta está verificado end-to-end.
+- `php -l` sobre los 13 archivos tocados/nuevos en ambos árboles, y además
+  sobre AMBOS árboles completos (`find ... -iname "*.php"`), sin errores.
+- `database.sql` reimportado desde cero con los cambios de esta ronda
+  (`mesas.ubicacion`, `pedido_items.estado_cocina`/`enviado_cocina_en`) y
+  usado para toda la validación de arriba — confirma que una instalación
+  nueva ya incluye el modelo nuevo sin necesitar la migración suelta.
+- Sincronización a `DEPLOY_HOSTINGER`: `cp` para archivos sin cambio de
+  profundidad de `require` (`includes/*`, `assets/css/style.css`,
+  `assets/sonidos/*.wav`) + `cp` seguido de `sed -i` (ajuste de
+  `../../includes/` → `../includes/`) + `unix2dos -q` inmediato para los
+  archivos de subcarpeta, tal como quedó documentado como lección en las
+  rondas 13/18b/20 — verificado que los 10 archivos de subcarpeta
+  quedaron en CRLF después del `sed` (no se repitió el bug). `diff`
+  **normalizado** (`tr -d '\r'` + el mismo `sed` de ajuste de ruta antes de
+  comparar) entre los dos árboles para los 13 archivos: idénticos. Barrido
+  de BOM: ninguno. `scripts/comparar_arboles.sh` corrido al final:
+  "OK: los árboles están sincronizados."
+- `config.php` restaurado al placeholder original (confirmado con `diff`
+  contra el backup), procesos de prueba (`mysqld`, `php -S`, Edge
+  headless) confirmados terminados (`Get-Process` sin resultados para los
+  3 después de matarlos).
+
 ## Regla de trabajo activa
 
 Cada ronda de cambios se valida con **ejecución real** (levantar PHP + MySQL/MariaDB

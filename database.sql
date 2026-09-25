@@ -102,6 +102,9 @@ CREATE TABLE IF NOT EXISTS mesas (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(50) NOT NULL,
     capacidad INT UNSIGNED NOT NULL DEFAULT 4,
+    -- ubicacion (ronda 21): separa la grilla de mesas/salon.php en dos
+    -- secciones ("Salón interno" / "Patio y exterior").
+    ubicacion ENUM('adentro', 'afuera') NOT NULL DEFAULT 'adentro',
     estado ENUM('libre', 'ocupada', 'cuenta_pedida') NOT NULL DEFAULT 'libre',
     activo TINYINT(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -181,6 +184,19 @@ CREATE INDEX idx_pedidos_estado_cerrado ON pedidos(estado, cerrado_en);
 -- Detalle de productos dentro de un pedido.
 -- cantidad: unidades enteras o kg con decimales según tipo_venta del producto.
 -- ---------------------------------------------------------------------
+-- estado_cocina (ronda 21): circuito de cocina por ítem, independiente del
+-- estado del pedido (pedidos.estado sigue siendo solo
+-- abierto/cuenta_pedida/cerrado/cancelado). Cada ítem nace 'pendiente';
+-- "Enviar a cocina" (pedidos/enviar_cocina.php) manda a 'enviado' TODOS
+-- los pendientes de un pedido de una vez (pueden ser de más de una ronda
+-- de pedidos si el mozo no lo había enviado antes); el panel de cocina
+-- (cocina/panel.php) pasa a 'listo'; el mozo, desde pedidos/nuevo.php,
+-- marca 'entregado' TODOS los 'listo' de ese pedido de una vez (ver
+-- decisión "por grupo, no por ítem individual" documentada en MEMORY.md,
+-- Ronda 21). Un mismo producto pedido de nuevo cuando la línea anterior ya
+-- estaba 'listo'/'entregado' NO se mergea en esa fila (agregar_item.php
+-- inserta una fila nueva 'pendiente' en ese caso) para no perder de vista
+-- que es una ronda de cocina distinta.
 CREATE TABLE IF NOT EXISTS pedido_items (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     pedido_id INT UNSIGNED NOT NULL,
@@ -188,11 +204,18 @@ CREATE TABLE IF NOT EXISTS pedido_items (
     cantidad DECIMAL(10,3) NOT NULL,
     precio_unitario DECIMAL(10,2) NOT NULL,
     subtotal DECIMAL(10,2) NOT NULL,
+    estado_cocina ENUM('pendiente', 'enviado', 'listo', 'entregado') NOT NULL DEFAULT 'pendiente',
+    -- Cuándo se mandó a cocina este ítem puntual (pedidos/enviar_cocina.php
+    -- la completa) — usada por cocina/panel.php para mostrar "hace cuánto"
+    -- por ítem en vez de por pedido completo (un pedido puede tener ítems
+    -- de más de una ronda enviados en momentos distintos).
+    enviado_cocina_en DATETIME NULL,
     CONSTRAINT fk_items_pedido FOREIGN KEY (pedido_id) REFERENCES pedidos(id),
     CONSTRAINT fk_items_producto FOREIGN KEY (producto_id) REFERENCES productos(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_items_pedido ON pedido_items(pedido_id);
+CREATE INDEX idx_items_estado_cocina ON pedido_items(estado_cocina);
 
 -- ---------------------------------------------------------------------
 -- Tabla: movimientos_stock
@@ -345,8 +368,8 @@ INSERT INTO usuarios (nombre, usuario, password_hash, rol, perfil_id) VALUES
 -- (5, 'Pan Casero (kg)', 'peso', 3200.00, 10.000, 2.000);
 
 -- Mesas de ejemplo
-INSERT INTO mesas (nombre, capacidad) VALUES
-('Mesa 1', 4), ('Mesa 2', 4), ('Mesa 3', 2), ('Mesa 4', 6), ('Para Llevar', 0);
+INSERT INTO mesas (nombre, capacidad, ubicacion) VALUES
+('Mesa 1', 4, 'adentro'), ('Mesa 2', 4, 'adentro'), ('Mesa 3', 2, 'afuera'), ('Mesa 4', 6, 'afuera'), ('Para Llevar', 0, 'adentro');
 
 -- Medios de pago iniciales (ronda 8)
 INSERT INTO medios_pago (nombre, es_efectivo) SELECT 'Efectivo', 1 WHERE NOT EXISTS (SELECT 1 FROM medios_pago WHERE nombre = 'Efectivo');

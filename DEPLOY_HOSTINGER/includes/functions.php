@@ -291,7 +291,7 @@ function recalcularTotalPedido(PDO $pdo, int $pedidoId): void
  */
 function obtenerEstadoPedido(PDO $pdo, int $pedidoId): array
 {
-    $stmt = $pdo->prepare("SELECT pi.id, pi.producto_id, pi.cantidad, pi.subtotal, p.nombre AS producto_nombre, p.tipo_venta
+    $stmt = $pdo->prepare("SELECT pi.id, pi.producto_id, pi.cantidad, pi.subtotal, pi.estado_cocina, p.nombre AS producto_nombre, p.tipo_venta
                             FROM pedido_items pi
                             JOIN productos p ON p.id = pi.producto_id
                             WHERE pi.pedido_id = ?
@@ -301,8 +301,16 @@ function obtenerEstadoPedido(PDO $pdo, int $pedidoId): array
 
     $total = 0;
     $itemsSalida = [];
+    $hayPendientes = false;
+    $hayListos = false;
     foreach ($items as $it) {
         $total += (float)$it['subtotal'];
+        if ($it['estado_cocina'] === 'pendiente') {
+            $hayPendientes = true;
+        }
+        if ($it['estado_cocina'] === 'listo') {
+            $hayListos = true;
+        }
         $itemsSalida[] = [
             'id' => (int)$it['id'],
             'producto_id' => (int)$it['producto_id'],
@@ -311,11 +319,31 @@ function obtenerEstadoPedido(PDO $pdo, int $pedidoId): array
             'cantidad' => (float)$it['cantidad'],
             'cantidad_texto' => formatearCantidad((float)$it['cantidad'], $it['tipo_venta']),
             'subtotal_texto' => formatearMoneda((float)$it['subtotal']),
+            'estado_cocina' => $it['estado_cocina'],
+            'estado_cocina_texto' => textoEstadoCocina($it['estado_cocina']),
         ];
     }
 
     return [
         'items' => $itemsSalida,
         'total_texto' => formatearMoneda($total),
+        'hay_pendientes_cocina' => $hayPendientes,
+        'hay_listos_cocina' => $hayListos,
     ];
+}
+
+/**
+ * Etiqueta corta en español para cada estado_cocina de un ítem de pedido
+ * (ronda 21), reutilizada en el carrito de pedidos/nuevo.php y en el
+ * panel de cocina.
+ */
+function textoEstadoCocina(string $estadoCocina): string
+{
+    switch ($estadoCocina) {
+        case 'pendiente': return 'Sin enviar';
+        case 'enviado': return 'En cocina';
+        case 'listo': return 'Listo';
+        case 'entregado': return 'Entregado';
+        default: return $estadoCocina;
+    }
 }

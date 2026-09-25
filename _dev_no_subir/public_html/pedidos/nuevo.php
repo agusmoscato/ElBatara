@@ -128,6 +128,20 @@ $stmt = $pdo->prepare("SELECT pi.*, p.nombre AS producto_nombre, p.tipo_venta
 $stmt->execute([$pedidoId]);
 $items = $stmt->fetchAll();
 
+// Circuito de cocina por ítem (ronda 21): controla si mostrar "Enviar a
+// cocina" (hay algo 'pendiente' todavía sin mandar) y/o "Marcar entregado"
+// (hay algo 'listo' esperando que el mozo lo lleve a la mesa).
+$hayPendientesCocina = false;
+$hayListosCocina = false;
+foreach ($items as $it) {
+    if ($it['estado_cocina'] === 'pendiente') {
+        $hayPendientesCocina = true;
+    }
+    if ($it['estado_cocina'] === 'listo') {
+        $hayListosCocina = true;
+    }
+}
+
 $tituloPagina = 'Pedido';
 require __DIR__ . '/../../includes/header.php';
 ?>
@@ -141,6 +155,17 @@ require __DIR__ . '/../../includes/header.php';
   </h2>
   <div class="d-flex flex-wrap gap-2">
     <span id="botonEstadoPedido"><?= renderBotonEstadoPedido($pedido['estado']) ?></span>
+    <button id="btnEnviarCocina" type="button" class="btn btn-outline-primary btn-lg-touch"
+            onclick="enviarACocina()" style="<?= $hayPendientesCocina ? '' : 'display:none' ?>">
+      🔥 Enviar a cocina
+    </button>
+    <button id="btnMarcarEntregado" type="button" class="btn btn-outline-success btn-lg-touch"
+            onclick="marcarEntregado()" style="<?= $hayListosCocina ? '' : 'display:none' ?>">
+      ✅ Marcar entregado
+    </button>
+    <a href="precuenta.php?pedido_id=<?= $pedidoId ?>" target="_blank" class="btn btn-outline-secondary btn-lg-touch">
+      🧾 Vista previa de cuenta
+    </a>
     <a href="cerrar.php?pedido_id=<?= $pedidoId ?>" class="btn btn-success btn-lg-touch">Cobrar / Cerrar</a>
     <button class="btn btn-outline-danger btn-lg-touch" onclick="cancelarPedido()">Cancelar pedido</button>
     <a href="../mesas/salon.php" class="btn btn-outline-secondary btn-lg-touch">Volver al salón</a>
@@ -233,6 +258,7 @@ require __DIR__ . '/../../includes/header.php';
               <tr data-item-id="<?= (int)$it['id'] ?>">
                 <td class="col-producto">
                   <span class="nombre-producto-item" title="<?= h($it['producto_nombre']) ?>"><?= h($it['producto_nombre']) ?></span>
+                  <span class="badge-cocina badge-cocina-<?= h($it['estado_cocina']) ?>"><?= h(textoEstadoCocina($it['estado_cocina'])) ?></span>
                 </td>
                 <td class="col-cantidad">
                   <?php if ($it['tipo_venta'] === 'unidad'): ?>
@@ -485,6 +511,42 @@ function cancelarPedido() {
   form.submit();
 }
 
+function enviarACocina() {
+  fetch('enviar_cocina.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `pedido_id=${PEDIDO_ID}&csrf_token=${encodeURIComponent(CSRF_TOKEN)}`
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) {
+      mostrarToast(data.error, { error: true, duracionMs: 3000 });
+      return;
+    }
+    actualizarPedido(data);
+    mostrarToast('🔥 Enviado a cocina');
+  })
+  .catch(() => mostrarToast('No se pudo enviar a cocina.', { error: true, duracionMs: 3000 }));
+}
+
+function marcarEntregado() {
+  fetch('marcar_entregado.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `pedido_id=${PEDIDO_ID}&csrf_token=${encodeURIComponent(CSRF_TOKEN)}`
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) {
+      mostrarToast(data.error, { error: true, duracionMs: 3000 });
+      return;
+    }
+    actualizarPedido(data);
+    mostrarToast('✅ Marcado como entregado');
+  })
+  .catch(() => mostrarToast('No se pudo marcar como entregado.', { error: true, duracionMs: 3000 }));
+}
+
 function pedirCuenta() {
   fetch('pedir_cuenta.php', {
     method: 'POST',
@@ -528,6 +590,10 @@ function actualizarPedido(data) {
     spanNombre.textContent = it.producto_nombre;
     spanNombre.title = it.producto_nombre;
     tdProducto.appendChild(spanNombre);
+    const spanCocina = document.createElement('span');
+    spanCocina.className = 'badge-cocina badge-cocina-' + it.estado_cocina;
+    spanCocina.textContent = it.estado_cocina_texto;
+    tdProducto.appendChild(spanCocina);
 
     const tdCantidad = document.createElement('td');
     tdCantidad.className = 'col-cantidad';
@@ -568,6 +634,11 @@ function actualizarPedido(data) {
     tbody.appendChild(tr);
   });
   document.getElementById('totalPedido').textContent = data.total_texto;
+
+  const btnEnviarCocina = document.getElementById('btnEnviarCocina');
+  const btnMarcarEntregado = document.getElementById('btnMarcarEntregado');
+  if (btnEnviarCocina) btnEnviarCocina.style.display = data.hay_pendientes_cocina ? '' : 'none';
+  if (btnMarcarEntregado) btnMarcarEntregado.style.display = data.hay_listos_cocina ? '' : 'none';
 }
 </script>
 

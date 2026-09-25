@@ -11,6 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'guard
     $id = intPositivoONull($_POST['id'] ?? null);
     $nombre = trim($_POST['nombre'] ?? '');
     $capacidad = filter_var($_POST['capacidad'] ?? 0, FILTER_VALIDATE_INT);
+    $ubicacion = in_array($_POST['ubicacion'] ?? '', ['adentro', 'afuera'], true) ? $_POST['ubicacion'] : 'adentro';
     $activo = isset($_POST['activo']) ? 1 : 0;
 
     if ($nombre === '') {
@@ -20,11 +21,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'guard
     } else {
         try {
             if ($id) {
-                $stmt = $pdo->prepare('UPDATE mesas SET nombre = ?, capacidad = ?, activo = ? WHERE id = ?');
-                $stmt->execute([$nombre, $capacidad, $activo, $id]);
+                $stmt = $pdo->prepare('UPDATE mesas SET nombre = ?, capacidad = ?, ubicacion = ?, activo = ? WHERE id = ?');
+                $stmt->execute([$nombre, $capacidad, $ubicacion, $activo, $id]);
             } else {
-                $stmt = $pdo->prepare('INSERT INTO mesas (nombre, capacidad, activo) VALUES (?, ?, ?)');
-                $stmt->execute([$nombre, $capacidad, $activo]);
+                $stmt = $pdo->prepare('INSERT INTO mesas (nombre, capacidad, ubicacion, activo) VALUES (?, ?, ?, ?)');
+                $stmt->execute([$nombre, $capacidad, $ubicacion, $activo]);
             }
             flashExito('Guardado correctamente.');
         } catch (PDOException $e) {
@@ -69,6 +70,13 @@ require __DIR__ . '/../../includes/header.php';
             <label class="form-label">Capacidad</label>
             <input type="number" name="capacidad" class="form-control" min="0" value="4" required>
           </div>
+          <div class="mb-3">
+            <label class="form-label">Ubicación</label>
+            <select name="ubicacion" class="form-select">
+              <option value="adentro">Salón interno</option>
+              <option value="afuera">Patio / exterior</option>
+            </select>
+          </div>
           <div class="form-check mb-3">
             <input type="checkbox" name="activo" class="form-check-input" id="activoNueva" checked>
             <label class="form-check-label" for="activoNueva">Activa</label>
@@ -95,15 +103,21 @@ require __DIR__ . '/../../includes/header.php';
       </div>
     </form>
     <table class="table table-striped bg-white shadow-sm">
-      <thead><tr><th>Nombre</th><th>Capacidad</th><th>Estado actual</th><th>Activa</th><th></th></tr></thead>
+      <thead><tr><th>Nombre</th><th>Capacidad</th><th>Ubicación</th><th>Estado actual</th><th>Activa</th><th></th></tr></thead>
       <tbody>
         <?php if (empty($mesas)): ?>
-          <tr><td colspan="5" class="text-muted">Sin mesas que coincidan con el filtro.</td></tr>
+          <tr><td colspan="6" class="text-muted">Sin mesas que coincidan con el filtro.</td></tr>
         <?php endif; ?>
         <?php foreach ($mesas as $m): $formId = 'form_mesa_' . (int)$m['id']; ?>
         <tr>
             <td><input form="<?= $formId ?>" type="text" name="nombre" value="<?= h($m['nombre']) ?>" class="form-control form-control-sm"></td>
             <td><input form="<?= $formId ?>" type="number" name="capacidad" value="<?= (int)$m['capacidad'] ?>" class="form-control form-control-sm" style="width:80px"></td>
+            <td>
+              <select form="<?= $formId ?>" name="ubicacion" class="form-select form-select-sm" style="width:150px">
+                <option value="adentro" <?= $m['ubicacion'] === 'adentro' ? 'selected' : '' ?>>Salón interno</option>
+                <option value="afuera" <?= $m['ubicacion'] === 'afuera' ? 'selected' : '' ?>>Patio / exterior</option>
+              </select>
+            </td>
             <td><span class="badge bg-info text-dark"><?= h($m['estado']) ?></span></td>
             <td>
               <div class="form-check form-switch">

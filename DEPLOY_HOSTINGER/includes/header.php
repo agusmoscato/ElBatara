@@ -53,7 +53,7 @@ $mostrarGrupoConfig = $mostrarConfigProductos || $mostrarConfigCategorias || $mo
 // "?v=XXXX" a la URL del CSS obliga al navegador a tratarlo como un
 // archivo distinto cada vez que se sube una versión nueva.
 // IMPORTANTE: subir este número cada vez que se edite style.css.
-$versionCss = '20260920-r19';
+$versionCss = '20260923-r21';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -129,6 +129,11 @@ $versionCss = '20260920-r19';
       <li class="nav-item">
         <a class="nav-link<?= $esActivoSidebar('egresos/listar.php') ?>" href="<?= $base ?>egresos/listar.php" title="Egresos">
           <span class="sidebar-icon">💸</span><span class="sidebar-label">Egresos</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link<?= $esActivoSidebar('cocina/panel.php') ?>" href="<?= $base ?>cocina/panel.php" title="Cocina">
+          <span class="sidebar-icon">🍳</span><span class="sidebar-label">Cocina</span>
         </a>
       </li>
       <?php if (tienePermiso('ver_caja')): ?>

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Salón - El Batará</title>
+<link rel="icon" type="image/png" href="../assets/img/logo.png">
+<link href="../assets/vendor/bootstrap-5.3.3/bootstrap.min.css" rel="stylesheet">
+<!-- Tipografía de marca (ronda 14): única dependencia externa no vendorizada
+     del sistema, a diferencia de Bootstrap/Chart.js. Se eligió no vendorizarla
+     por tiempo; si el local tiene internet inestable, el fallback del CSS
+     (sans-serif / serif del sistema) sigue dejando todo legible y funcional,
+     solo cambia la tipografía. -->
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="../assets/css/style.css?v=20260923-r21" rel="stylesheet">
+</head>
+<body>
+<!-- Barra superior, solo visible en celular/tablet angosta (< 768px):
+     hamburguesa que abre el sidebar como offcanvas. -->
+<nav class="mobile-topbar d-md-none no-imprimir">
+  <button class="hamburger-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebar"
+          aria-controls="sidebar" aria-label="Abrir menú">
+    <span></span><span></span><span></span>
+  </button>
+  <a class="mobile-topbar-brand" href="../dashboard.php">
+    <img src="../assets/img/logo.png" alt="El Batará" class="logo-imagen"
+         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+    <span class="logo-texto">El</span>
+    El Batará  </a>
+</nav>
+
+<!-- Sidebar: offcanvas-md = por debajo de 768px se comporta como un panel
+     off-canvas (oculto, se abre con la hamburguesa de arriba); desde 768px
+     en adelante queda fijo a la izquierda como sidebar normal (ver reglas
+     "@media (min-width: 768px) #sidebar.offcanvas-md" en style.css). -->
+<div class="offcanvas-md offcanvas-start app-sidebar no-imprimir" tabindex="-1" id="sidebar" aria-labelledby="sidebarLabel">
+  <div class="offcanvas-header d-md-none">
+    <h5 class="offcanvas-title text-white" id="sidebarLabel">El Batará</h5>
+    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#sidebar" aria-label="Cerrar"></button>
+  </div>
+  <div class="offcanvas-body sidebar-body d-flex flex-column p-0">
+    <div class="sidebar-brand d-none d-md-flex align-items-center justify-content-between">
+      <a class="d-flex align-items-center gap-2 text-decoration-none" href="../dashboard.php">
+        <img src="../assets/img/logo.png" alt="El Batará" class="logo-imagen"
+             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <span class="logo-texto">El</span>
+        <span class="sidebar-brand-textos">
+          <span class="sidebar-brand-text">El Batará</span>
+          <span class="sidebar-brand-subtitulo">Panel de gestión</span>
+        </span>
+      </a>
+    </div>
+
+    <ul class="nav flex-column sidebar-nav flex-grow-1">
+      <li class="nav-item">
+        <a class="nav-link" href="../dashboard.php" title="Inicio">
+          <span class="sidebar-icon">🏠</span><span class="sidebar-label">Inicio</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link active" href="../mesas/salon.php" title="Salón">
+          <span class="sidebar-icon">🍽️</span><span class="sidebar-label">Salón</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="../stock/movimientos.php" title="Stock">
+          <span class="sidebar-icon">📦</span><span class="sidebar-label">Stock</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="../egresos/listar.php" title="Egresos">
+          <span class="sidebar-icon">💸</span><span class="sidebar-label">Egresos</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="../cocina/panel.php" title="Cocina">
+          <span class="sidebar-icon">🍳</span><span class="sidebar-label">Cocina</span>
+        </a>
+      </li>
+            <li class="nav-item">
+        <a class="nav-link" href="../caja/historial.php" title="Caja">
+          <span class="sidebar-icon">💰</span><span class="sidebar-label">Caja</span>
+        </a>
+      </li>
+                  <li class="nav-item">
+        <button class="nav-link sidebar-group-toggle collapsed" type="button"
+                data-bs-toggle="collapse" data-bs-target="#navReportes"
+                aria-expanded="false" aria-controls="navReportes" title="Reportes">
+          <span class="sidebar-icon">📊</span><span class="sidebar-label">Reportes</span>
+          <span class="sidebar-chevron">&#9662;</span>
+        </button>
+        <ul class="nav flex-column sidebar-subnav collapse" id="navReportes">
+          <li><a class="nav-link" href="../reportes/ventas.php"><span class="sidebar-label">Ventas por día</span></a></li>
+          <li><a class="nav-link" href="../reportes/productos_top.php"><span class="sidebar-label">Productos más vendidos</span></a></li>
+          <li><a class="nav-link" href="../reportes/medios_pago.php"><span class="sidebar-label">Por medio de pago</span></a></li>
+          <li><a class="nav-link" href="../reportes/ingresos_egresos.php"><span class="sidebar-label">Ingresos y egresos</span></a></li>
+          <li><a class="nav-link" href="../reportes/auditoria_pedidos.php"><span class="sidebar-label">Auditoría de pedidos</span></a></li>
+        </ul>
+      </li>
+                  <li class="nav-item">
+        <button class="nav-link sidebar-group-toggle collapsed" type="button"
+                data-bs-toggle="collapse" data-bs-target="#navConfig"
+                aria-expanded="false" aria-controls="navConfig" title="Configuración">
+          <span class="sidebar-icon">⚙️</span><span class="sidebar-label">Configuración</span>
+          <span class="sidebar-chevron">&#9662;</span>
+        </button>
+        <ul class="nav flex-column sidebar-subnav collapse" id="navConfig">
+          <li><a class="nav-link" href="../productos/listar.php"><span class="sidebar-label">Productos</span></a></li>          <li><a class="nav-link" href="../categorias/listar.php"><span class="sidebar-label">Categorías</span></a></li>          <li><a class="nav-link" href="../mesas/listar.php"><span class="sidebar-label">Mesas</span></a></li>          <li><a class="nav-link" href="../medios_pago/listar.php"><span class="sidebar-label">Medios de pago</span></a></li>          <li><a class="nav-link" href="../egresos/categorias.php"><span class="sidebar-label">Categorías de egreso</span></a></li>          <li><a class="nav-link" href="../usuarios/listar.php"><span class="sidebar-label">Usuarios</span></a></li>          <li><a class="nav-link" href="../perfiles/listar.php"><span class="sidebar-label">Perfiles</span></a></li>        </ul>
+      </li>
+          </ul>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user-info">
+        Administrador (Administrador)
+      </div>
+      <a href="../cambiar_password.php" class="sidebar-footer-link" title="Cambiar contraseña">
+        <span class="sidebar-icon">🔑</span><span class="sidebar-label">Cambiar contraseña</span>
+      </a>
+      <a href="../logout.php" class="sidebar-footer-link" title="Salir">
+        <span class="sidebar-icon">🚪</span><span class="sidebar-label">Salir</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="container-fluid px-3 main-content">
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2>Salón</h2>
+  <a href="../pedidos/nuevo.php?para_llevar=1" class="btn btn-primary btn-lg-touch">🛍️ Para llevar</a>
+</div>
+
+
+  <div class="salon-seccion-titulo">🏠 Salón interno</div>
+  <div class="row g-3">
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+      <a href="../pedidos/nuevo.php?pedido_id=3" class="mesa-card mesa-en-cocina">
+        <div class="mesa-card-fila">
+          <span class="mesa-card-nombre">Mesa 1</span>
+          <span class="mesa-estado-texto">Ocupada · En cocina</span>
+        </div>
+                  <div class="mesa-capacidad">Capacidad: 4 personas</div>
+                          <div class="mesa-tiempo">⏱ 0 min · $ 14.000,00</div>
+              </a>
+    </div>
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+      <a href="../pedidos/nuevo.php?pedido_id=4" class="mesa-card mesa-para-retirar">
+        <div class="mesa-card-fila">
+          <span class="mesa-card-nombre">Mesa 2</span>
+          <span class="mesa-estado-texto">Ocupada · Retirar</span>
+        </div>
+                  <div class="mesa-capacidad">Capacidad: 4 personas</div>
+                          <div class="mesa-tiempo">⏱ 0 min · $ 20.000,00</div>
+              </a>
+    </div>
+      </div>
+
+  <div class="salon-seccion-titulo">🌿 Patio / exterior</div>
+  <div class="row g-3">
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+      <a href="../pedidos/nuevo.php?pedido_id=5" class="mesa-card mesa-cuenta_pedida">
+        <div class="mesa-card-fila">
+          <span class="mesa-card-nombre">Mesa 3</span>
+          <span class="mesa-estado-texto">Cuenta pedida</span>
+        </div>
+                  <div class="mesa-capacidad">Capacidad: 2 personas</div>
+                          <div class="mesa-tiempo">⏱ 0 min · $ 15.000,00</div>
+              </a>
+    </div>
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+      <a href="../pedidos/nuevo.php?mesa_id=4" class="mesa-card mesa-libre">
+        <div class="mesa-card-fila">
+          <span class="mesa-card-nombre">Mesa 4</span>
+          <span class="mesa-estado-texto">Libre</span>
+        </div>
+                  <div class="mesa-capacidad">Capacidad: 6 personas</div>
+                      </a>
+    </div>
+      </div>
+
+<div class="leyenda-mesas no-imprimir">
+  <span class="leyenda-punto" style="--color-punto: var(--exito);">Libre</span>
+  <span class="leyenda-punto" style="--color-punto: var(--marca-principal);">Ocupada</span>
+  <span class="leyenda-punto" style="--color-punto: var(--alerta);">Cuenta pedida</span>
+  <span class="leyenda-punto" style="--color-punto: var(--info);">En cocina</span>
+  <span class="leyenda-punto" style="--color-punto: #2f8f5b;">Para retirar</span>
+</div>
+
+</div>
+<script src="../assets/vendor/bootstrap-5.3.3/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -25,6 +25,22 @@ foreach ($stmt->fetchAll() as $fila) {
     }
 }
 
+// Ronda 21: estado de cocina agregado por pedido, para que el Salón
+// muestre de un vistazo si hay algo "en cocina" (algún ítem 'enviado') o
+// "para retirar" (algún ítem 'listo' sin entregar todavía). Se calcula acá
+// con una sola consulta agregada (no una por mesa) para no meter N+1 en la
+// pantalla que más se recarga del sistema.
+$cocinaPorPedido = [];
+$stmt = $pdo->query("SELECT pedido_id,
+                             SUM(estado_cocina = 'enviado') AS cant_enviado,
+                             SUM(estado_cocina = 'listo') AS cant_listo
+                      FROM pedido_items
+                      WHERE pedido_id IN (SELECT id FROM pedidos WHERE estado IN ('abierto', 'cuenta_pedida'))
+                      GROUP BY pedido_id");
+foreach ($stmt->fetchAll() as $fila) {
+    $cocinaPorPedido[$fila['pedido_id']] = $fila;
+}
+
 $tituloPagina = 'Salón';
 require __DIR__ . '/../../includes/header.php';
 ?>
@@ -34,28 +50,45 @@ require __DIR__ . '/../../includes/header.php';
   <a href="../pedidos/nuevo.php?para_llevar=1" class="btn btn-primary btn-lg-touch">🛍️ Para llevar</a>
 </div>
 
-<div class="row g-3">
-  <?php foreach ($mesas as $m): ?>
-    <?php
-      $pedidoAbierto = $pedidosAbiertosPorMesa[$m['id']] ?? null;
-      if ($pedidoAbierto) {
-          $href = '../pedidos/nuevo.php?pedido_id=' . (int)$pedidoAbierto['id'];
-          // La mesa se pinta según el estado del pedido, no del campo
-          // "estado" de la mesa: en curso mientras el pedido está
-          // abierto, y el tono ámbar de "cuenta pedida" cuando ya se
-          // pidió la cuenta y solo falta cobrar (ronda 20).
-          if ($pedidoAbierto['estado'] === 'cuenta_pedida') {
-              $claseEstado = 'mesa-cuenta_pedida';
-              $textoEstado = 'Cuenta pedida';
-          } else {
-              $claseEstado = 'mesa-ocupada';
-              $textoEstado = 'Ocupada';
-          }
-      } else {
-          $href = '../pedidos/nuevo.php?mesa_id=' . (int)$m['id'];
-          $claseEstado = 'mesa-' . $m['estado'];
-          $textoEstado = ucfirst(str_replace('_', ' ', $m['estado']));
-      }
+<?php
+// Ronda 21: la grilla se separa en dos secciones por ubicacion de la mesa
+// ("Salón interno" / "Patio y exterior"), manteniendo el resto del
+// comportamiento (colores de estado, tiempo transcurrido) igual. Una
+// función local para no repetir el bloque de la tarjeta dos veces.
+$renderTarjetaMesa = function (array $m) use ($pedidosAbiertosPorMesa, $cocinaPorPedido) {
+    $pedidoAbierto = $pedidosAbiertosPorMesa[$m['id']] ?? null;
+    if ($pedidoAbierto) {
+        $href = '../pedidos/nuevo.php?pedido_id=' . (int)$pedidoAbierto['id'];
+        // La mesa se pinta según el estado del pedido, no del campo
+        // "estado" de la mesa: en curso mientras el pedido está
+        // abierto, y el tono ámbar de "cuenta pedida" cuando ya se
+        // pidió la cuenta y solo falta cobrar (ronda 20).
+        if ($pedidoAbierto['estado'] === 'cuenta_pedida') {
+            $claseEstado = 'mesa-cuenta_pedida';
+            $textoEstado = 'Cuenta pedida';
+        } else {
+            $claseEstado = 'mesa-ocupada';
+            $textoEstado = 'Ocupada';
+        }
+
+        // Estado de cocina (ronda 21): se superpone al color/texto de
+        // arriba cuando hay algo en curso en cocina — "listo" es más
+        // urgente para el mozo que "en cocina", así que gana si hay las
+        // dos cosas a la vez. Si todos los ítems activos ya están
+        // 'entregado' (o no hay ninguno todavía), no se toca nada.
+        $cocina = $cocinaPorPedido[$pedidoAbierto['id']] ?? null;
+        if ($cocina && (int)$cocina['cant_listo'] > 0) {
+            $claseEstado = 'mesa-para-retirar';
+            $textoEstado .= ' · Retirar';
+        } elseif ($cocina && (int)$cocina['cant_enviado'] > 0) {
+            $claseEstado = 'mesa-en-cocina';
+            $textoEstado .= ' · En cocina';
+        }
+    } else {
+        $href = '../pedidos/nuevo.php?mesa_id=' . (int)$m['id'];
+        $claseEstado = 'mesa-' . $m['estado'];
+        $textoEstado = ucfirst(str_replace('_', ' ', $m['estado']));
+    }
     ?>
     <div class="col-6 col-sm-4 col-md-3 col-lg-2">
       <a href="<?= h($href) ?>" class="mesa-card <?= $claseEstado ?>">
@@ -71,13 +104,33 @@ require __DIR__ . '/../../includes/header.php';
         <?php endif; ?>
       </a>
     </div>
-  <?php endforeach; ?>
-</div>
+    <?php
+};
+
+$mesasAdentro = array_filter($mesas, fn($m) => $m['ubicacion'] === 'adentro');
+$mesasAfuera = array_filter($mesas, fn($m) => $m['ubicacion'] === 'afuera');
+?>
+
+<?php if (!empty($mesasAdentro)): ?>
+  <div class="salon-seccion-titulo">🏠 Salón interno</div>
+  <div class="row g-3">
+    <?php foreach ($mesasAdentro as $m) $renderTarjetaMesa($m); ?>
+  </div>
+<?php endif; ?>
+
+<?php if (!empty($mesasAfuera)): ?>
+  <div class="salon-seccion-titulo">🌿 Patio / exterior</div>
+  <div class="row g-3">
+    <?php foreach ($mesasAfuera as $m) $renderTarjetaMesa($m); ?>
+  </div>
+<?php endif; ?>
 
 <div class="leyenda-mesas no-imprimir">
   <span class="leyenda-punto" style="--color-punto: var(--exito);">Libre</span>
   <span class="leyenda-punto" style="--color-punto: var(--marca-principal);">Ocupada</span>
   <span class="leyenda-punto" style="--color-punto: var(--alerta);">Cuenta pedida</span>
+  <span class="leyenda-punto" style="--color-punto: var(--info);">En cocina</span>
+  <span class="leyenda-punto" style="--color-punto: #2f8f5b;">Para retirar</span>
 </div>
 
 <?php require __DIR__ . '/../../includes/footer.php'; ?>

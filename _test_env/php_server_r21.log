@@ -1,0 +1,253 @@
+[Wed Sep 23 22:51:04 2026] PHP 8.3.13 Development Server (http://127.0.0.1:8921) started
+[Wed Sep 23 22:51:06 2026] 127.0.0.1:60600 Accepted
+[Wed Sep 23 22:51:06 2026] 127.0.0.1:60600 [200]: GET /login.php
+[Wed Sep 23 22:51:06 2026] 127.0.0.1:60600 Closing
+[Wed Sep 23 22:51:10 2026] 127.0.0.1:60601 Accepted
+[Wed Sep 23 22:51:10 2026] 127.0.0.1:60601 [200]: GET /login.php
+[Wed Sep 23 22:51:10 2026] 127.0.0.1:60601 Closing
+[Wed Sep 23 22:51:20 2026] 127.0.0.1:60602 Accepted
+[Wed Sep 23 22:51:20 2026] 127.0.0.1:60602 [200]: GET /login.php
+[Wed Sep 23 22:51:20 2026] 127.0.0.1:60602 Closing
+[Wed Sep 23 22:51:20 2026] 127.0.0.1:60603 Accepted
+[Wed Sep 23 22:51:20 2026] 127.0.0.1:60603 [302]: POST /login.php
+[Wed Sep 23 22:51:20 2026] 127.0.0.1:60603 Closing
+[Wed Sep 23 22:51:20 2026] 127.0.0.1:60605 Accepted
+[Wed Sep 23 22:51:20 2026] 127.0.0.1:60605 [200]: GET /dashboard.php
+[Wed Sep 23 22:51:20 2026] 127.0.0.1:60605 Closing
+[Wed Sep 23 22:51:26 2026] 127.0.0.1:60607 Accepted
+[Wed Sep 23 22:51:26 2026] 127.0.0.1:60607 [200]: GET /caja/abrir.php
+[Wed Sep 23 22:51:26 2026] 127.0.0.1:60607 Closing
+[Wed Sep 23 22:51:26 2026] 127.0.0.1:60609 Accepted
+[Wed Sep 23 22:51:26 2026] 127.0.0.1:60609 [302]: POST /caja/abrir.php
+[Wed Sep 23 22:51:26 2026] 127.0.0.1:60609 Closing
+[Wed Sep 23 22:51:35 2026] 127.0.0.1:60612 Accepted
+[Wed Sep 23 22:51:35 2026] 127.0.0.1:60612 [200]: GET /pedidos/nuevo.php?mesa_id=1
+[Wed Sep 23 22:51:35 2026] 127.0.0.1:60612 Closing
+[Wed Sep 23 22:51:40 2026] 127.0.0.1:60614 Accepted
+[Wed Sep 23 22:51:41 2026] 127.0.0.1:60614 [200]: POST /pedidos/agregar_item.php
+[Wed Sep 23 22:51:41 2026] 127.0.0.1:60614 Closing
+[Wed Sep 23 22:51:41 2026] 127.0.0.1:60616 Accepted
+[Wed Sep 23 22:51:41 2026] 127.0.0.1:60616 [200]: POST /pedidos/agregar_item.php
+[Wed Sep 23 22:51:41 2026] 127.0.0.1:60616 Closing
+[Wed Sep 23 22:51:45 2026] 127.0.0.1:60618 Accepted
+[Wed Sep 23 22:51:46 2026] 127.0.0.1:60618 [200]: POST /pedidos/enviar_cocina.php
+[Wed Sep 23 22:51:46 2026] 127.0.0.1:60618 Closing
+[Wed Sep 23 22:51:46 2026] 127.0.0.1:60620 Accepted
+[Wed Sep 23 22:51:46 2026] 127.0.0.1:60620 [200]: GET /cocina/api.php
+[Wed Sep 23 22:51:46 2026] 127.0.0.1:60620 Closing
+[Wed Sep 23 22:51:50 2026] 127.0.0.1:60622 Accepted
+[Wed Sep 23 22:51:50 2026] 127.0.0.1:60622 [200]: GET /mesas/salon.php
+[Wed Sep 23 22:51:50 2026] 127.0.0.1:60622 Closing
+[Wed Sep 23 22:51:56 2026] 127.0.0.1:60624 Accepted
+[Wed Sep 23 22:51:56 2026] 127.0.0.1:60624 [200]: POST /cocina/marcar_listo.php
+[Wed Sep 23 22:51:56 2026] 127.0.0.1:60624 Closing
+[Wed Sep 23 22:51:56 2026] 127.0.0.1:60626 Accepted
+[Wed Sep 23 22:51:56 2026] 127.0.0.1:60626 [200]: GET /mesas/salon.php
+[Wed Sep 23 22:51:56 2026] 127.0.0.1:60626 Closing
+[Wed Sep 23 22:51:56 2026] 127.0.0.1:60628 Accepted
+[Wed Sep 23 22:51:56 2026] 127.0.0.1:60628 [200]: GET /cocina/api.php
+[Wed Sep 23 22:51:56 2026] 127.0.0.1:60628 Closing
+[Wed Sep 23 22:52:01 2026] 127.0.0.1:60630 Accepted
+[Wed Sep 23 22:52:02 2026] 127.0.0.1:60630 [200]: POST /pedidos/marcar_entregado.php
+[Wed Sep 23 22:52:02 2026] 127.0.0.1:60630 Closing
+[Wed Sep 23 22:52:02 2026] 127.0.0.1:60632 Accepted
+[Wed Sep 23 22:52:02 2026] 127.0.0.1:60632 [200]: GET /cocina/api.php
+[Wed Sep 23 22:52:02 2026] 127.0.0.1:60632 Closing
+[Wed Sep 23 22:52:02 2026] 127.0.0.1:60634 Accepted
+[Wed Sep 23 22:52:02 2026] 127.0.0.1:60634 [200]: GET /mesas/salon.php
+[Wed Sep 23 22:52:02 2026] 127.0.0.1:60634 Closing
+[Wed Sep 23 22:52:06 2026] 127.0.0.1:54212 Accepted
+[Wed Sep 23 22:52:07 2026] 127.0.0.1:54212 [200]: POST /pedidos/agregar_item.php
+[Wed Sep 23 22:52:07 2026] 127.0.0.1:54212 Closing
+[Wed Sep 23 22:52:13 2026] 127.0.0.1:54214 Accepted
+[Wed Sep 23 22:52:13 2026] 127.0.0.1:54214 [200]: POST /pedidos/enviar_cocina.php
+[Wed Sep 23 22:52:13 2026] 127.0.0.1:54214 Closing
+[Wed Sep 23 22:52:14 2026] 127.0.0.1:54216 Accepted
+[Wed Sep 23 22:52:14 2026] 127.0.0.1:54216 [200]: GET /cocina/api.php
+[Wed Sep 23 22:52:14 2026] 127.0.0.1:54216 Closing
+[Wed Sep 23 22:52:14 2026] 127.0.0.1:54218 Accepted
+[Wed Sep 23 22:52:14 2026] 127.0.0.1:54218 [200]: POST /cocina/marcar_listo.php
+[Wed Sep 23 22:52:14 2026] 127.0.0.1:54218 Closing
+[Wed Sep 23 22:52:14 2026] 127.0.0.1:54220 Accepted
+[Wed Sep 23 22:52:14 2026] 127.0.0.1:54220 [200]: POST /pedidos/marcar_entregado.php
+[Wed Sep 23 22:52:14 2026] 127.0.0.1:54220 Closing
+[Wed Sep 23 22:52:19 2026] 127.0.0.1:54222 Accepted
+[Wed Sep 23 22:52:19 2026] 127.0.0.1:54222 [200]: GET /pedidos/precuenta.php?pedido_id=1
+[Wed Sep 23 22:52:19 2026] 127.0.0.1:54222 Closing
+[Wed Sep 23 22:52:33 2026] 127.0.0.1:65215 Accepted
+[Wed Sep 23 22:52:33 2026] 127.0.0.1:65215 [200]: GET /pedidos/cerrar.php?pedido_id=1
+[Wed Sep 23 22:52:33 2026] 127.0.0.1:65215 Closing
+[Wed Sep 23 22:52:33 2026] 127.0.0.1:65218 Accepted
+[Wed Sep 23 22:52:33 2026] 127.0.0.1:65218 [302]: POST /pedidos/cerrar.php?pedido_id=1
+[Wed Sep 23 22:52:33 2026] 127.0.0.1:65218 Closing
+[Wed Sep 23 22:52:33 2026] 127.0.0.1:65220 Accepted
+[Wed Sep 23 22:52:34 2026] 127.0.0.1:65220 [200]: GET /pedidos/ticket.php?pedido_id=1
+[Wed Sep 23 22:52:34 2026] 127.0.0.1:65220 Closing
+[Wed Sep 23 22:52:44 2026] 127.0.0.1:65223 Accepted
+[Wed Sep 23 22:52:44 2026] 127.0.0.1:65223 [200]: GET /pedidos/nuevo.php?mesa_id=2
+[Wed Sep 23 22:52:44 2026] 127.0.0.1:65223 Closing
+[Wed Sep 23 22:52:44 2026] 127.0.0.1:65225 Accepted
+[Wed Sep 23 22:52:45 2026] 127.0.0.1:65225 [200]: POST /pedidos/agregar_item.php
+[Wed Sep 23 22:52:45 2026] 127.0.0.1:65225 Closing
+[Wed Sep 23 22:52:45 2026] 127.0.0.1:65227 Accepted
+[Wed Sep 23 22:52:45 2026] 127.0.0.1:65227 [200]: POST /pedidos/agregar_item.php
+[Wed Sep 23 22:52:45 2026] 127.0.0.1:65227 Closing
+[Wed Sep 23 22:52:45 2026] 127.0.0.1:65229 Accepted
+[Wed Sep 23 22:52:45 2026] 127.0.0.1:65229 [200]: POST /pedidos/enviar_cocina.php
+[Wed Sep 23 22:52:45 2026] 127.0.0.1:65229 Closing
+[Wed Sep 23 22:52:45 2026] 127.0.0.1:65232 Accepted
+[Wed Sep 23 22:52:45 2026] 127.0.0.1:65232 [200]: POST /cocina/marcar_listo.php
+[Wed Sep 23 22:52:45 2026] 127.0.0.1:65232 Closing
+[Wed Sep 23 22:52:53 2026] 127.0.0.1:65237 Accepted
+[Wed Sep 23 22:52:53 2026] 127.0.0.1:65237 [302]: POST /pedidos/cancelar.php
+[Wed Sep 23 22:52:53 2026] 127.0.0.1:65237 Closing
+[Wed Sep 23 22:52:53 2026] 127.0.0.1:65239 Accepted
+[Wed Sep 23 22:52:53 2026] 127.0.0.1:65239 [200]: GET /mesas/salon.php
+[Wed Sep 23 22:52:53 2026] 127.0.0.1:65239 Closing
+[Wed Sep 23 22:52:53 2026] 127.0.0.1:65242 Accepted
+[Wed Sep 23 22:52:53 2026] 127.0.0.1:65242 [200]: GET /cocina/api.php
+[Wed Sep 23 22:52:53 2026] 127.0.0.1:65242 Closing
+[Wed Sep 23 22:52:53 2026] 127.0.0.1:65244 Accepted
+[Wed Sep 23 22:52:53 2026] 127.0.0.1:65244 [200]: GET /mesas/salon.php
+[Wed Sep 23 22:52:53 2026] 127.0.0.1:65244 Closing
+[Wed Sep 23 22:53:00 2026] 127.0.0.1:65246 Accepted
+[Wed Sep 23 22:53:00 2026] 127.0.0.1:65246 [403]: POST /pedidos/enviar_cocina.php
+[Wed Sep 23 22:53:00 2026] 127.0.0.1:65246 Closing
+[Wed Sep 23 22:53:00 2026] 127.0.0.1:65247 Accepted
+[Wed Sep 23 22:53:00 2026] 127.0.0.1:65247 [403]: POST /cocina/marcar_listo.php
+[Wed Sep 23 22:53:00 2026] 127.0.0.1:65247 Closing
+[Wed Sep 23 22:53:05 2026] 127.0.0.1:58553 Accepted
+[Wed Sep 23 22:53:05 2026] 127.0.0.1:58553 [200]: GET /mesas/salon.php
+[Wed Sep 23 22:53:05 2026] 127.0.0.1:58553 Closing
+[Wed Sep 23 22:53:05 2026] 127.0.0.1:58555 Accepted
+[Wed Sep 23 22:53:05 2026] 127.0.0.1:58555 [200]: GET /mesas/listar.php
+[Wed Sep 23 22:53:05 2026] 127.0.0.1:58555 Closing
+[Wed Sep 23 22:53:24 2026] 127.0.0.1:58557 Accepted
+[Wed Sep 23 22:53:24 2026] 127.0.0.1:58557 [200]: GET /pedidos/nuevo.php?mesa_id=1
+[Wed Sep 23 22:53:24 2026] 127.0.0.1:58557 Closing
+[Wed Sep 23 22:53:24 2026] 127.0.0.1:50852 Accepted
+[Wed Sep 23 22:53:24 2026] 127.0.0.1:50852 [200]: POST /pedidos/agregar_item.php
+[Wed Sep 23 22:53:24 2026] 127.0.0.1:50852 Closing
+[Wed Sep 23 22:53:24 2026] 127.0.0.1:50854 Accepted
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50854 [200]: POST /pedidos/enviar_cocina.php
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50854 Closing
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50856 Accepted
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50856 [200]: GET /pedidos/nuevo.php?mesa_id=2
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50856 Closing
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50858 Accepted
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50858 [200]: POST /pedidos/agregar_item.php
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50858 Closing
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50860 Accepted
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50860 [200]: POST /pedidos/enviar_cocina.php
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50860 Closing
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50862 Accepted
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50862 [200]: POST /cocina/marcar_listo.php
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50862 Closing
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50864 Accepted
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50864 [200]: GET /pedidos/nuevo.php?mesa_id=3
+[Wed Sep 23 22:53:25 2026] 127.0.0.1:50864 Closing
+[Wed Sep 23 22:53:26 2026] 127.0.0.1:50866 Accepted
+[Wed Sep 23 22:53:26 2026] 127.0.0.1:50866 [200]: POST /pedidos/agregar_item.php
+[Wed Sep 23 22:53:26 2026] 127.0.0.1:50866 Closing
+[Wed Sep 23 22:53:26 2026] 127.0.0.1:50868 Accepted
+[Wed Sep 23 22:53:26 2026] 127.0.0.1:50868 [200]: POST /pedidos/pedir_cuenta.php
+[Wed Sep 23 22:53:26 2026] 127.0.0.1:50868 Closing
+[Wed Sep 23 22:53:26 2026] 127.0.0.1:50870 Accepted
+[Wed Sep 23 22:53:26 2026] 127.0.0.1:50870 [200]: GET /mesas/salon.php
+[Wed Sep 23 22:53:26 2026] 127.0.0.1:50870 Closing
+[Wed Sep 23 22:53:33 2026] 127.0.0.1:50872 Accepted
+[Wed Sep 23 22:53:33 2026] 127.0.0.1:50872 [200]: GET /mesas/salon.php
+[Wed Sep 23 22:53:33 2026] 127.0.0.1:50872 Closing
+[Wed Sep 23 22:53:38 2026] 127.0.0.1:50875 Accepted
+[Wed Sep 23 22:53:38 2026] 127.0.0.1:50875 [200]: GET /mesas/salon.php
+[Wed Sep 23 22:53:38 2026] 127.0.0.1:50875 Closing
+[Wed Sep 23 22:54:13 2026] 127.0.0.1:60675 Accepted
+[Wed Sep 23 22:54:13 2026] 127.0.0.1:60675 [200]: GET /mesas/salon.php
+[Wed Sep 23 22:54:13 2026] 127.0.0.1:60675 Closing
+[Wed Sep 23 22:54:13 2026] 127.0.0.1:58112 Accepted
+[Wed Sep 23 22:54:13 2026] 127.0.0.1:58112 [200]: GET /assets/vendor/bootstrap-5.3.3/bootstrap.min.css
+[Wed Sep 23 22:54:13 2026] 127.0.0.1:51877 Accepted
+[Wed Sep 23 22:54:13 2026] 127.0.0.1:57188 Accepted
+[Wed Sep 23 22:54:13 2026] 127.0.0.1:58112 Closing
+[Wed Sep 23 22:54:13 2026] 127.0.0.1:51877 [200]: GET /assets/css/style.css?v=20260923-r21
+[Wed Sep 23 22:54:13 2026] 127.0.0.1:57188 [200]: GET /assets/img/logo.png
+[Wed Sep 23 22:54:13 2026] 127.0.0.1:51877 Closing
+[Wed Sep 23 22:54:14 2026] 127.0.0.1:56492 Accepted
+[Wed Sep 23 22:54:14 2026] 127.0.0.1:57188 Closing
+[Wed Sep 23 22:54:14 2026] 127.0.0.1:56492 [200]: GET /assets/vendor/bootstrap-5.3.3/bootstrap.bundle.min.js
+[Wed Sep 23 22:54:14 2026] 127.0.0.1:56492 Closing
+[Wed Sep 23 22:54:14 2026] 127.0.0.1:65401 Accepted
+[Wed Sep 23 22:54:14 2026] 127.0.0.1:65401 [200]: GET /assets/img/logo.png
+[Wed Sep 23 22:54:14 2026] 127.0.0.1:65401 Closing
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:56601 Accepted
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:56601 [200]: GET /mesas/salon.php
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:56601 Closing
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:53625 Accepted
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:53625 [200]: GET /assets/vendor/bootstrap-5.3.3/bootstrap.min.css
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:59826 Accepted
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:59826 [200]: GET /assets/css/style.css?v=20260923-r21
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:52312 Accepted
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:53625 Closing
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:63225 Accepted
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:59826 Closing
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:52312 [200]: GET /assets/img/logo.png
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:63225 [200]: GET /assets/vendor/bootstrap-5.3.3/bootstrap.bundle.min.js
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:52312 Closing
+[Wed Sep 23 22:54:21 2026] 127.0.0.1:63225 Closing
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:52222 Accepted
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:52691 Accepted
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:52222 [200]: GET /mesas/salon.php
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:52222 Closing
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:52691 [200]: GET /assets/vendor/bootstrap-5.3.3/bootstrap.min.css
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:62005 Accepted
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:52691 Closing
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:52863 Accepted
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:62005 [200]: GET /assets/css/style.css?v=20260923-r21
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:58090 Accepted
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:62005 Closing
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:52863 [200]: GET /assets/img/logo.png
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:52863 Closing
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:58090 [200]: GET /assets/vendor/bootstrap-5.3.3/bootstrap.bundle.min.js
+[Wed Sep 23 22:54:48 2026] 127.0.0.1:58090 Closing
+[Wed Sep 23 22:54:56 2026] 127.0.0.1:53082 Accepted
+[Wed Sep 23 22:54:56 2026] 127.0.0.1:53082 [200]: GET /pedidos/precuenta.php?pedido_id=3
+[Wed Sep 23 22:54:56 2026] 127.0.0.1:53082 Closing
+[Wed Sep 23 22:54:56 2026] 127.0.0.1:53567 Accepted
+[Wed Sep 23 22:54:56 2026] 127.0.0.1:53567 [404]: GET /favicon.ico - No such file or directory
+[Wed Sep 23 22:54:56 2026] 127.0.0.1:53567 Closing
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:58877 Accepted
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:58877 [200]: GET /cocina/panel.php
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:58877 Closing
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:50346 Accepted
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:50346 [200]: GET /assets/vendor/bootstrap-5.3.3/bootstrap.min.css
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:60583 Accepted
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:50346 Closing
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:52833 Accepted
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:57112 Accepted
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:60583 [200]: GET /assets/css/style.css?v=20260923-r21
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:52833 [200]: GET /assets/img/logo.png
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:57112 [200]: GET /assets/vendor/bootstrap-5.3.3/bootstrap.bundle.min.js
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:60583 Closing
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:52833 Closing
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:57112 Closing
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:62510 Accepted
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:62510 [200]: GET /assets/sonidos/alerta_cocina.wav
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:62510 Closing
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:59024 Accepted
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:59024 [200]: GET /cocina/api.php
+[Wed Sep 23 22:55:04 2026] 127.0.0.1:59024 Closing
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:52101 Accepted
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:52101 [200]: GET /pedidos/nuevo.php?pedido_id=4
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:52101 Closing
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:64822 Accepted
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:64822 [200]: GET /assets/vendor/bootstrap-5.3.3/bootstrap.min.css
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:61272 Accepted
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:64822 Closing
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:50064 Accepted
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:61272 [200]: GET /assets/css/style.css?v=20260923-r21
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:54257 Accepted
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:61272 Closing
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:50064 [200]: GET /assets/img/logo.png
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:50064 Closing
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:54257 [200]: GET /assets/vendor/bootstrap-5.3.3/bootstrap.bundle.min.js
+[Wed Sep 23 22:55:17 2026] 127.0.0.1:54257 Closing

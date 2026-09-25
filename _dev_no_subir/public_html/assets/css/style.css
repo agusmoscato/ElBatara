@@ -428,9 +428,10 @@ h2, h4, h5.card-title {
 
 .mesa-card-fila {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 8px;
+    gap: 6px 8px;
 }
 
 .mesa-card-nombre {
@@ -501,6 +502,79 @@ h2, h4, h5.card-title {
 .mesa-inactiva .mesa-estado-texto {
     background-color: #e2dccf;
     color: var(--texto-secundario);
+}
+
+/* =========================================================
+   ESTADO DE COCINA POR MESA (ronda 21) — se superpone al color de
+   estado del pedido (Ocupada/Cuenta pedida) cuando hay algún ítem
+   'enviado' (en cocina) o 'listo' (a retirar): "listo" gana por ser más
+   urgente para el mozo que "en cocina".
+   ========================================================= */
+.mesa-en-cocina {
+    border-color: var(--info);
+    background-color: var(--info-suave);
+}
+.mesa-en-cocina .mesa-estado-texto {
+    background-color: var(--info);
+    color: #fff;
+}
+.mesa-en-cocina .mesa-tiempo {
+    color: #2c4d63;
+}
+
+.mesa-para-retirar {
+    border-color: #2f8f5b;
+    background-color: rgba(47, 143, 91, 0.1);
+}
+.mesa-para-retirar .mesa-estado-texto {
+    background-color: #2f8f5b;
+    color: #fff;
+}
+.mesa-para-retirar .mesa-tiempo {
+    color: #1f5f3c;
+}
+
+/* Sección "Salón interno" / "Patio y exterior" de mesas/salon.php */
+.salon-seccion-titulo {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--marca-principal-oscuro);
+    margin: 18px 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--marca-crema-oscuro);
+}
+.salon-seccion-titulo:first-child {
+    margin-top: 0;
+}
+
+/* Badge chico de estado_cocina en el carrito de pedidos/nuevo.php */
+.badge-cocina {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    padding: 1px 6px;
+    border-radius: 999px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+.badge-cocina-pendiente {
+    background-color: #e2dccf;
+    color: var(--texto-secundario);
+}
+.badge-cocina-enviado {
+    background-color: var(--info);
+    color: #fff;
+}
+.badge-cocina-listo {
+    background-color: #2f8f5b;
+    color: #fff;
+}
+.badge-cocina-entregado {
+    background-color: var(--exito-suave);
+    color: var(--exito);
 }
 
 /* Referencia de colores al pie de la grilla de mesas */

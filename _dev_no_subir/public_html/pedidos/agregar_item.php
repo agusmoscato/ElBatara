@@ -58,8 +58,15 @@ $resultado = ejecutarTransaccion($pdo, function (PDO $pdo) use ($productoId, $pe
     // Si el producto ya está en el carrito, sumamos a la línea existente en
     // vez de crear una línea nueva (ronda 13: antes cada toque insertaba una
     // fila propia, y el mismo producto tocado varias veces aparecía
-    // duplicado en vez de acumulado).
-    $stmtExistente = $pdo->prepare('SELECT id, cantidad, subtotal FROM pedido_items WHERE pedido_id = ? AND producto_id = ? FOR UPDATE');
+    // duplicado en vez de acumulado). Ronda 21: esto SOLO vale si esa línea
+    // todavía no se sirvió (estado_cocina 'pendiente' o 'enviado') — si ya
+    // está 'listo' o 'entregado', pedirla de nuevo es una ronda de cocina
+    // nueva y tiene que nacer en una fila propia 'pendiente', para no hacer
+    // crecer en silencio una línea que cocina/el mozo ya dieron por
+    // terminada (ver MEMORY.md, Ronda 21).
+    $stmtExistente = $pdo->prepare("SELECT id, cantidad, subtotal FROM pedido_items
+                                     WHERE pedido_id = ? AND producto_id = ? AND estado_cocina IN ('pendiente', 'enviado')
+                                     FOR UPDATE");
     $stmtExistente->execute([$pedidoId, $productoId]);
     $itemExistente = $stmtExistente->fetch();
 
